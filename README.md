@@ -22,7 +22,7 @@ To install notcha, you can follow these steps:
 
 **Examples:**
 
-*Notcha is Action*
+*Notcha in Action*
 
 1:
 
