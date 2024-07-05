@@ -7,9 +7,8 @@ Desktop customization with a time notch
 * [Circular] Hide button on the left 
 * Show on hover
 * Real Time Update
-* Right in front of your eyes
+* Right before your eyes
 * No need to move taskbar
-* '' for Rainmeter Clock
 * Background Process
 * Less Power Consumption
 
