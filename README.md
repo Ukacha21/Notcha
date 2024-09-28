@@ -47,8 +47,7 @@ To install notcha, you can follow these steps:
 
 We welcome contributions to notcha! If you have any bug fixes, improvements, or new features, you can submit a pull request.
 
-**License**
 
-Notcha is licensed under the **CC BY-NC - 4.0
-Creative Commons Attribution-NonCommercial 4.0 International** license. You can find the full license text in the LICENSE file.
+
+
 
