@@ -1,3 +1,5 @@
+# Python 3.12.3
+
 import tkinter as tk
 import time
 from threading import Timer
