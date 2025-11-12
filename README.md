@@ -43,9 +43,6 @@ To install notcha, you can follow these steps:
 
 ![](img5.png)
 
-**Contributing**
-
-We welcome contributions to notcha! If you have any bug fixes, improvements, or new features, you can submit a pull request.
 
 
 
