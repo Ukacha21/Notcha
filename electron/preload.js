@@ -9,6 +9,14 @@ contextBridge.exposeInMainWorld('api', {
   // Power actions: 'lock', 'sleep', 'shutdown', 'restart'
   powerAction: (action) => ipcRenderer.send('power-action', action),
 
+  // DND Mode
+  toggleDND: () => ipcRenderer.invoke('toggle-dnd'),
+
+  // Media Hub
+  getMediaSources: () => ipcRenderer.invoke('get-media-sources'),
+  sendMediaAction: (data) => ipcRenderer.send('media-action', data),
+  onMediaSourcesUpdated: (cb) => ipcRenderer.on('media-sources-updated', (_e, sources) => cb(sources)),
+
   // App Launcher
   launchApp: (target) => ipcRenderer.send('launch-app', target),
 

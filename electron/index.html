@@ -12,38 +12,46 @@
 
       <!-- ================= COMPACT PILL ================= -->
       <div class="layer compact">
-        <div class="c-left">
+        <div class="c-pill-inner" id="cPillInner">
           <span class="c-clock" id="cClock">--:--</span>
-          <div class="c-wave" id="cWave" title="Playing music">
-            <span></span><span></span><span></span><span></span>
+          
+          <div class="c-companion" id="cCompanion">
+            <span class="c-dnd-badge" id="cDndBadge" title="Do Not Disturb Active">
+              <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </span>
+            <div class="c-wave" id="cWave" title="Playing Media">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <span class="c-timer" id="cTimerWrap">
+              <svg class="ring" viewBox="0 0 16 16">
+                <circle class="track" cx="8" cy="8" r="6" />
+                <circle class="bar" id="ringBar" cx="8" cy="8" r="6" />
+              </svg>
+              <span id="cTimer">25:00</span>
+            </span>
+            <span class="c-alarm-badge" id="cAlarmBadge" style="display: none;" title="Alarm Set">
+              <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span id="cAlarmTime">--:--</span>
+            </span>
           </div>
-        </div>
-        <div class="c-right">
-          <span class="c-timer" id="cTimerWrap">
-            <svg class="ring" viewBox="0 0 16 16">
-              <circle class="track" cx="8" cy="8" r="6" />
-              <circle class="bar" id="ringBar" cx="8" cy="8" r="6" />
-            </svg>
-            <span id="cTimer">25:00</span>
-          </span>
         </div>
       </div>
 
       <!-- ================= EXPANDED ISLAND ================= -->
       <div class="layer expanded">
         
-        <!-- Header: Controls & Tabs -->
+        <!-- Header: Controls & Main Tabs -->
         <header class="island-header">
           <button id="hideBtn" class="orb" title="Toggle Auto-hide (Ctrl/Cmd+Alt+N)"></button>
           
           <nav class="island-tabs">
-            <button class="tab-btn active" data-tab="focus" title="Focus Timer">
+            <button class="tab-btn active" data-tab="focus" title="Focus, Timer & Alarm">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg>
               <span>Focus</span>
             </button>
-            <button class="tab-btn" data-tab="music" title="Music & Ambient Soundscapes">
+            <button class="tab-btn" data-tab="music" title="Multi-App Media Hub">
               <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-              <span>Music</span>
+              <span>Media</span>
             </button>
             <button class="tab-btn" data-tab="power" title="System Power Controls">
               <svg viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
@@ -72,113 +80,151 @@
         <!-- Body: Tab Panels -->
         <main class="island-body">
 
-          <!-- 1. FOCUS PANEL -->
+          <!-- ================= 1. FOCUS PANEL ================= -->
           <section class="panel active" id="panelFocus">
-            <div class="focus-left">
-              <div class="big-time">
-                <span id="eTime">--:--</span>
-                <span id="eSec" class="sec">00</span>
+            
+            <!-- Focus Toolbar: DND & Sub-tabs -->
+            <div class="focus-toolbar">
+              <button id="dndBtn" class="dnd-pill-btn" title="Toggle Do Not Disturb">
+                <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <span id="dndText">DND: OFF</span>
+              </button>
+
+              <div class="focus-subtabs">
+                <button class="subtab-btn active" data-sub="session">🎯 Focus Session</button>
+                <button class="subtab-btn" data-sub="timer">⏱ Timer</button>
+                <button class="subtab-btn" data-sub="alarm">⏰ Alarm</button>
               </div>
-              <div id="eDate" class="date-str">Loading...</div>
             </div>
 
-            <div class="focus-right">
-              <div class="focus-adjust-row">
-                <div class="stepper">
-                  <button id="timeDecBtn" class="step-btn" title="Decrease 5m">−</button>
-                  <span id="focusDurationLabel" class="dur-label">25m</span>
-                  <button id="timeIncBtn" class="step-btn" title="Increase 5m">+</button>
-                </div>
-                <div class="presets">
-                  <button class="preset-chip" data-min="15">15m</button>
-                  <button class="preset-chip active" data-min="25">25m</button>
-                  <button class="preset-chip" data-min="45">45m</button>
-                  <button class="preset-chip" data-min="60">60m</button>
-                </div>
+            <!-- Sub-view 1: Focus Session -->
+            <div class="subview active" id="subSession">
+              <div class="task-input-wrap">
+                <input type="text" id="focusTaskInput" class="task-input" placeholder="What task are you working on? (e.g. Code Notcha, Study, Write...)" />
               </div>
 
-              <div class="timer-controls">
-                <button id="timerBtn" class="primary-btn">
-                  <svg class="btn-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                  <span id="timerBtnText">Start Focus (25m)</span>
-                </button>
-                <button id="timerResetBtn" class="icon-btn" title="Reset Timer" style="display: none;">
-                  <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <!-- 2. MUSIC PANEL -->
-          <section class="panel" id="panelMusic">
-            <div class="player-left">
-              <div class="track-artwork" id="trackArt">
-                <div class="vinyl-disc" id="vinylDisc">
-                  <div class="vinyl-center"></div>
+              <div class="focus-main-content">
+                <div class="focus-clock-side">
+                  <div class="big-time">
+                    <span id="eTime">--:--</span>
+                    <span id="eSec" class="sec">00</span>
+                  </div>
+                  <div id="eDate" class="date-str">Loading...</div>
                 </div>
-              </div>
-              <div class="track-info">
-                <div class="track-title" id="trackTitle">Lofi Study Beats</div>
-                <div class="track-meta">
-                  <span class="track-genre" id="trackGenre">Chillhop / Beats</span>
-                  <div class="sound-wave" id="playerWave">
-                    <span></span><span></span><span></span><span></span><span></span>
+
+                <div class="focus-controls-side">
+                  <div class="stepper-row">
+                    <div class="stepper">
+                      <button id="timeDecBtn" class="step-btn" title="Decrease 5m">−</button>
+                      <span id="focusDurationLabel" class="dur-label">25m</span>
+                      <button id="timeIncBtn" class="step-btn" title="Increase 5m">+</button>
+                    </div>
+                    <div class="presets">
+                      <button class="preset-chip" data-min="15">15m</button>
+                      <button class="preset-chip active" data-min="25">25m</button>
+                      <button class="preset-chip" data-min="45">45m</button>
+                      <button class="preset-chip" data-min="60">60m</button>
+                      <button class="preset-chip" data-min="90">90m</button>
+                    </div>
+                  </div>
+
+                  <div class="timer-controls">
+                    <button id="timerBtn" class="primary-btn">
+                      <svg class="btn-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      <span id="timerBtnText">Start Focus (25m)</span>
+                    </button>
+                    <button id="timerResetBtn" class="icon-btn" title="Reset Session" style="display: none;">
+                      <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="player-right">
-              <!-- Controls: Prev, Play/Pause, Next, Soundscape select -->
-              <div class="player-top-row">
-                <button id="prevTrackBtn" class="ctrl-btn" title="Previous Track">
-                  <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
-                </button>
-                <button id="playPauseBtn" class="ctrl-btn play-btn" title="Play / Pause">
-                  <svg id="playIcon" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-                  <svg id="pauseIcon" viewBox="0 0 24 24" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                </button>
-                <button id="nextTrackBtn" class="ctrl-btn" title="Next Track">
-                  <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-                </button>
-                
-                <!-- Track Selector Dropdown -->
-                <select id="trackSelect" class="track-select" title="Choose Soundscape">
-                  <option value="0">☕ Lofi Study Beats</option>
-                  <option value="1">🌧️ Rainy Cafe & Thunder</option>
-                  <option value="2">🌲 Pine Forest & Birds</option>
-                  <option value="3">🌌 Deep Alpha Waves</option>
-                  <option value="4">🎹 Synthwave Chill Drive</option>
-                </select>
+            <!-- Sub-view 2: Quick Timer -->
+            <div class="subview" id="subTimer">
+              <div class="task-input-wrap">
+                <input type="text" id="quickTimerLabel" class="task-input" placeholder="Timer label (e.g. Tea brew, Oven, Zoom meeting in 15m)..." />
               </div>
 
-              <!-- Seek Slider Row -->
-              <div class="seek-row">
-                <span id="seekTimeCurrent" class="time-stamp">0:00</span>
-                <div class="slider-container">
-                  <input type="range" id="seekSlider" class="custom-slider seek-slider" min="0" max="100" value="0" step="0.5" />
-                  <div class="slider-fill" id="seekFill"></div>
+              <div class="quick-timer-body">
+                <div class="timer-digits-row">
+                  <div class="digit-box">
+                    <input type="number" id="qtHours" min="0" max="23" value="0" />
+                    <span>hr</span>
+                  </div>
+                  <span class="colon">:</span>
+                  <div class="digit-box">
+                    <input type="number" id="qtMins" min="0" max="59" value="10" />
+                    <span>min</span>
+                  </div>
+                  <span class="colon">:</span>
+                  <div class="digit-box">
+                    <input type="number" id="qtSecs" min="0" max="59" value="0" />
+                    <span>sec</span>
+                  </div>
                 </div>
-                <span id="seekTimeTotal" class="time-stamp">--:--</span>
-              </div>
 
-              <!-- Volume Slider Row -->
-              <div class="volume-row">
-                <button id="muteBtn" class="vol-icon-btn" title="Mute / Unmute">
-                  <svg id="volHighIcon" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-                  <svg id="volMuteIcon" viewBox="0 0 24 24" style="display:none;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
-                </button>
-                <div class="slider-container">
-                  <input type="range" id="volSlider" class="custom-slider" min="0" max="100" value="70" />
-                  <div class="slider-fill" id="volFill" style="width: 70%;"></div>
+                <div class="qt-chips-row">
+                  <button class="qt-chip" data-add="60">+1m</button>
+                  <button class="qt-chip" data-add="300">+5m</button>
+                  <button class="qt-chip" data-add="600">+10m</button>
+                  <button class="qt-chip" data-add="900">+15m</button>
+                  <button class="qt-chip" data-add="1800">+30m</button>
                 </div>
-                <span id="volPercent" class="vol-num">70%</span>
-                <button id="volModeBtn" class="mode-tag" title="Toggle App Volume / Master OS Volume">App Vol</button>
+
+                <div class="qt-actions-row">
+                  <button id="qtStartBtn" class="primary-btn">Start Timer</button>
+                  <button id="qtResetBtn" class="icon-btn" title="Reset Timer" style="display: none;">
+                    <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                  </button>
+                </div>
               </div>
             </div>
+
+            <!-- Sub-view 3: Alarm Clock -->
+            <div class="subview" id="subAlarm">
+              <div class="task-input-wrap">
+                <input type="text" id="alarmLabelInput" class="task-input" placeholder="Alarm note (e.g. Standup Meeting, Medicine, Break)..." />
+              </div>
+
+              <div class="alarm-body">
+                <div class="alarm-picker-row">
+                  <div class="alarm-input-wrap">
+                    <input type="time" id="alarmTimeInput" class="alarm-time-input" />
+                  </div>
+                  <button id="alarmToggleBtn" class="primary-btn alarm-btn">Set Alarm</button>
+                </div>
+                <div class="alarm-status-text" id="alarmStatusText">No alarm set</div>
+              </div>
+            </div>
+
           </section>
 
-          <!-- 3. POWER PANEL -->
+          <!-- ================= 2. MULTI-APP MEDIA PANEL ================= -->
+          <section class="panel" id="panelMusic">
+            
+            <!-- Source Selector Navigation Bar -->
+            <div class="media-nav-bar">
+              <button id="carouselPrevBtn" class="carousel-arrow" title="Previous Media App">‹</button>
+              
+              <div class="media-source-pills" id="mediaSourcePills">
+                <!-- Dynamically rendered source pills -->
+              </div>
+
+              <button id="carouselNextBtn" class="carousel-arrow" title="Next Media App">›</button>
+            </div>
+
+            <!-- Multi-App Sliding Carousel Viewport -->
+            <div class="media-carousel-viewport">
+              <div class="media-carousel-track" id="mediaCarouselTrack">
+                <!-- Sliding Card Screens populated dynamically -->
+              </div>
+            </div>
+
+          </section>
+
+          <!-- ================= 3. POWER PANEL ================= -->
           <section class="panel" id="panelPower">
             <div class="power-grid">
               <button class="power-card" id="lockPcBtn" data-action="lock">
@@ -223,7 +269,7 @@
             </div>
           </section>
 
-          <!-- 4. APPS PANEL -->
+          <!-- ================= 4. APPS PANEL ================= -->
           <section class="panel" id="panelApps">
             <div class="apps-grid" id="appsGrid">
               <button class="app-item" data-app="browser" title="Open Web Browser">
@@ -265,7 +311,7 @@
             </div>
           </section>
 
-          <!-- 5. CLIPBOARD PANEL -->
+          <!-- ================= 5. CLIPBOARD PANEL ================= -->
           <section class="panel" id="panelClips">
             <div class="clips-header">
               <input type="text" id="clipSearchInput" class="clip-search" placeholder="Search copied snippets..." />
