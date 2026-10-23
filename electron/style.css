@@ -125,9 +125,10 @@ html, body {
 }
 
 .layer.compact {
-  width: 204px;
-  margin-left: -102px;
-  padding: 0 12px;
+  width: 100%;
+  left: 0;
+  margin-left: 0;
+  padding: 0 14px;
 }
 
 .layer.expanded {
@@ -858,6 +859,8 @@ html, body {
 .app-icon-circle.spotify { color: #1ed760; }
 .app-icon-circle.vlc { color: #ff8800; }
 .app-icon-circle.telegram { color: #229ed9; }
+.app-icon-circle.aimp { color: #f59e0b; }
+.app-icon-circle.system { color: var(--accent); }
 .app-icon-circle.lofi { color: var(--accent); }
 .app-name-label {
   font-size: 12px;
@@ -1042,13 +1045,203 @@ html, body {
 #panelPower {
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 .power-grid {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
+.power-grid.hidden {
+  display: none !important;
+}
+
+/* Power Confirmation Warning View */
+.power-confirm-view {
+  width: 100%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  animation: confirm-fade-in 0.22s var(--spring);
+}
+.power-confirm-view.active {
+  display: flex !important;
+}
+
+@keyframes confirm-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.confirm-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 440px;
+  background: linear-gradient(145deg, rgba(28, 28, 35, 0.94), rgba(16, 16, 20, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 18px 24px 16px 24px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
+}
+
+.confirm-icon-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin-bottom: 8px;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.confirm-icon-badge svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Danger / Shutdown theme */
+.confirm-card.theme-shutdown .confirm-icon-badge {
+  background: rgba(244, 63, 94, 0.2);
+  color: #f43f5e;
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.45);
+  animation: pulse-danger-icon 1.2s infinite alternate ease-in-out;
+}
+.confirm-card.theme-shutdown {
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+/* Warning / Restart theme */
+.confirm-card.theme-restart .confirm-icon-badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.45);
+  animation: pulse-warning-icon 1.2s infinite alternate ease-in-out;
+}
+.confirm-card.theme-restart {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+/* Low-power / Sleep theme */
+.confirm-card.theme-sleep .confirm-icon-badge {
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.45);
+}
+.confirm-card.theme-sleep {
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+@keyframes pulse-danger-icon {
+  0% { transform: scale(1); box-shadow: 0 0 12px rgba(244, 63, 94, 0.25); }
+  100% { transform: scale(1.08); box-shadow: 0 0 24px rgba(244, 63, 94, 0.6); }
+}
+
+@keyframes pulse-warning-icon {
+  0% { transform: scale(1); box-shadow: 0 0 12px rgba(245, 158, 11, 0.25); }
+  100% { transform: scale(1.08); box-shadow: 0 0 24px rgba(245, 158, 11, 0.6); }
+}
+
+.confirm-info {
+  margin-bottom: 14px;
+}
+.confirm-heading {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+  margin-bottom: 5px;
+}
+.confirm-warning-text {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.4;
+  max-width: 360px;
+}
+
+.confirm-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.confirm-btn-cancel {
+  flex: 1;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+.confirm-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.confirm-btn-action {
+  flex: 1.3;
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+}
+.confirm-btn-action svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.confirm-btn-action:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.12);
+}
+
+/* Specific Proceed Button Colors */
+.confirm-card.theme-shutdown .confirm-btn-action {
+  background: linear-gradient(135deg, #f43f5e, #dc2626);
+  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.45);
+}
+.confirm-card.theme-restart .confirm-btn-action {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
+}
+.confirm-card.theme-sleep .confirm-btn-action {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.45);
+}
+
 .power-card {
   display: flex;
   flex-direction: column;
@@ -1091,17 +1284,6 @@ html, body {
 .shutdown-icon { background: rgba(244, 63, 94, 0.15); color: #f43f5e; }
 .card-title { font-size: 12.5px; font-weight: 700; display: block; }
 .card-sub { font-size: 10px; color: var(--text-mute); margin-top: 2px; display: block; }
-
-.power-card.armed {
-  background: var(--danger-soft);
-  border: 1px solid var(--danger);
-  animation: pulse-danger 0.8s ease-in-out infinite;
-}
-.power-card.armed .card-title { color: var(--danger); }
-@keyframes pulse-danger {
-  0%, 100% { box-shadow: 0 0 10px rgba(244, 63, 94, 0.4); }
-  50% { box-shadow: 0 0 20px rgba(244, 63, 94, 0.7); }
-}
 
 /* ==========================================
    4. APPS PANEL STYLES

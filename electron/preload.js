@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // DND Mode
   toggleDND: () => ipcRenderer.invoke('toggle-dnd'),
+  getDND: () => ipcRenderer.invoke('get-dnd'),
 
   // Media Hub
   getMediaSources: () => ipcRenderer.invoke('get-media-sources'),

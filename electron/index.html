@@ -226,7 +226,7 @@
 
           <!-- ================= 3. POWER PANEL ================= -->
           <section class="panel" id="panelPower">
-            <div class="power-grid">
+            <div class="power-grid" id="powerGrid">
               <button class="power-card" id="lockPcBtn" data-action="lock">
                 <div class="card-icon lock-icon">
                   <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -266,6 +266,26 @@
                   <span class="card-sub">Power off safely</span>
                 </div>
               </button>
+            </div>
+
+            <!-- Confirmation Warning Screen -->
+            <div class="power-confirm-view" id="powerConfirmView">
+              <div class="confirm-card" id="confirmCard">
+                <div class="confirm-icon-badge" id="confirmIconBadge">
+                  <svg id="confirmIconSvg" viewBox="0 0 24 24"></svg>
+                </div>
+                <div class="confirm-info">
+                  <div class="confirm-heading" id="confirmHeading">Shut Down Computer?</div>
+                  <div class="confirm-warning-text" id="confirmWarningText">⚠️ Warning: All open applications will close and unsaved work will be lost.</div>
+                </div>
+                <div class="confirm-buttons">
+                  <button class="confirm-btn-cancel" id="powerConfirmCancelBtn" type="button">Cancel</button>
+                  <button class="confirm-btn-action" id="powerConfirmProceedBtn" type="button">
+                    <svg viewBox="0 0 24 24" id="powerProceedIcon"></svg>
+                    <span id="powerProceedLabel">Shut Down</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
 

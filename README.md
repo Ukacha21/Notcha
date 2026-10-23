@@ -1,31 +1,27 @@
-# Notcha 1.3.1
+# Notcha 1.3.2
 
 > A dynamic-island style desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, and power controls.
 
 ![Notcha](logo2.png)
 
-## What's New in 1.3.1 ("A whole lotta improvements")
+## What's New in 1.3.2
 
-- 🎵 **Music & Ambient Soundscapes Player**:
-  - Built-in Lo-Fi and ambient focus soundscapes (Lo-Fi Study Beats, Gentle Rain & Thunder, Pine Forest & Birds, Alpha Waves, Synthwave).
-  - **Seek Slider**: Interactive scrubbing with live current and total timestamps.
-  - **Volume Slider**: Smooth volume adjustment with 1-click mute and toggle between App Volume & System Master Volume.
-  - Animated audio visualizer waveform in both expanded island and compact pill.
-  - Vinyl record spin animation during playback.
+- 🛡️ **Power Safety Confirmation Modal**:
+  - **Shut Down**, **Restart**, and **Sleep** now bring up an explicit warning confirmation card with pulsing alert badges and dedicated confirmation buttons (*"Shut Down"*, *"Restart"*, *"Sleep PC"*) alongside *"Cancel"* to prevent accidental clicks.
+  - **Fail-safe dismissals**: Pressing Escape, switching tabs, or unhovering automatically dismisses the warning safely.
+  - **Instant screen lock**: Uses native macOS `SACLockScreenImmediate()` to lock immediately to the password prompt without screensaver delay.
 
-- ⏱ **Adjustable Focus Timer**:
-  - Stepper buttons (`-` / `+`) to adjust duration by 5-minute increments (1m to 120m).
-  - Quick preset chips (`15m`, `25m` Pomodoro, `45m`, `60m`).
-  - Pause, Resume, and Reset capabilities.
-  - Pleasant harmonic chime on session complete + island celebration glow.
-  - Remembers your preferred focus duration across restarts.
+- 🎵 **System Media Sync & Multi-App Carousel**:
+  - Live query via `MediaRemote` reads exact playback status (`playing` vs `paused`) and real elapsed timestamps across apps (Telegram, Spotify, Apple Music, YouTube in Brave/Chrome, VLC, AIMP).
+  - Accurate play/pause state without false active waves while paused.
+  - Interactive seek slider with Command 24 (`SeekToPlaybackPosition`) and in-place DOM updates preventing seek bar snapping or jumping.
+  - Multi-source swipeable / wheel-scrollable carousel.
 
-- ⚡ **System Power Controls**:
-  - 🔒 **Lock Workstation**: Secure screen immediately.
-  - 🌙 **Sleep Mode**: Put system into low-power sleep state.
-  - ⚡ **Shut Down**: Safe OS shutdown.
-  - 🔄 **Restart**: Reboot system.
-  - **Safety Arming**: Critical actions require a second confirmation click within 3 seconds to prevent accidental misclicks.
+- 🔕 **System Do Not Disturb (DND) Integration**:
+  - Toggles macOS Control Center Focus mode directly and syncs state on startup.
+
+- ⏰ **Centered Island Clock**:
+  - The compact notch pill features a beautifully centered clock that smoothly glides to the corner only when companion badges (timer, alarm, DND, audio wave) become active.
 
 - 🚀 **Quick App Shortcuts**:
   - Instant launchers for Browser, Terminal, VS Code, Files/Explorer, Music/Spotify, Calculator, Notes, and Settings.

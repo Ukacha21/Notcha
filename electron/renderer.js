@@ -87,9 +87,25 @@ let quickTimer = null; // { end, total, paused, remaining, label }
 // Alarm State
 let alarm = load('alarmSetting', null); // { time: "HH:MM", label: "..." }
 
-// Power Button Arming
-let armingAction = null;
-let armingTimer = null;
+// Power Confirmation Elements & State
+const powerGrid = $('powerGrid');
+const powerConfirmView = $('powerConfirmView');
+const confirmCard = $('confirmCard');
+const confirmIconSvg = $('confirmIconSvg');
+const confirmHeading = $('confirmHeading');
+const confirmWarningText = $('confirmWarningText');
+const powerConfirmCancelBtn = $('powerConfirmCancelBtn');
+const powerConfirmProceedBtn = $('powerConfirmProceedBtn');
+const powerProceedIcon = $('powerProceedIcon');
+const powerProceedLabel = $('powerProceedLabel');
+let pendingPowerAction = null;
+
+function hidePowerConfirmation() {
+  pendingPowerAction = null;
+  if (!powerConfirmView || !powerGrid) return;
+  powerConfirmView.classList.remove('active');
+  powerGrid.classList.remove('hidden');
+}
 
 // ==========================================
 // 1. TABS & SUB-VIEWS
@@ -101,6 +117,7 @@ function switchTab(tabName) {
 
   tabBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabName));
   panels.forEach((p) => p.classList.toggle('active', p.id === `panel${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`));
+  hidePowerConfirmation();
 }
 
 tabBtns.forEach((btn) => {
@@ -146,6 +163,13 @@ dndBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleDND();
 });
+if (window.api.getDND) {
+  window.api.getDND().then((val) => {
+    isDND = !!val;
+    updateDNDUI();
+    updateCompactCompanion();
+  });
+}
 updateDNDUI();
 
 // ==========================================
@@ -195,7 +219,7 @@ function setInside(inside) {
   } else {
     if (!ignoring && !pinned) { ignoring = true; window.api.setIgnore(true); }
     if (hovering && !leaveT && !pinned) {
-      leaveT = setTimeout(() => { hovering = false; leaveT = null; render(); }, 250);
+      leaveT = setTimeout(() => { hovering = false; leaveT = null; hidePowerConfirmation(); render(); }, 250);
     }
   }
 }
@@ -567,23 +591,64 @@ function getAppIconSvg(iconType) {
   if (iconType === 'telegram') {
     return `<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
   }
+  if (iconType === 'aimp') {
+    return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>`;
+  }
   if (iconType === 'lofi') {
     return `<svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`;
   }
   return `<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
 }
 
+const isSeekingMap = {};
+const isVolumingMap = {};
+let currentSourceId = 'system';
+let lastUserPlayPauseTime = 0;
+const userToggledState = {};
+
+// Smooth second-by-second playback advancement for playing media
+setInterval(() => {
+  if (!detectedSources || detectedSources.length === 0) return;
+  detectedSources.forEach((s) => {
+    if (s.state === 'playing') {
+      const dur = s.duration || 300;
+      s.position = Math.min(dur, (s.position || 0) + 1);
+
+      if (!isSeekingMap[s.id]) {
+        const card = mediaCarouselTrack.querySelector(`.media-card-screen[data-id="${s.id}"]`);
+        if (card) {
+          const pct = dur > 0 ? (s.position / dur) * 100 : 0;
+          const seekEl = card.querySelector('.card-seek');
+          const fillEl = card.querySelector('.seek-row .slider-fill');
+          const timeCur = card.querySelector('.time-cur');
+          if (seekEl) seekEl.value = pct;
+          if (fillEl) fillEl.style.width = `${pct}%`;
+          if (timeCur) timeCur.textContent = formatSecs(s.position);
+        }
+      }
+    }
+  });
+}, 1000);
+
 function renderMediaCarousel() {
   if (detectedSources.length === 0) return;
-  activeMediaIdx = Math.max(0, Math.min(detectedSources.length - 1, activeMediaIdx));
 
-  // Render navigation pills
+  // Preserve active selection by source ID
+  let targetIdx = detectedSources.findIndex((s) => s.id === currentSourceId);
+  if (targetIdx === -1) {
+    const playIdx = detectedSources.findIndex((s) => s.state === 'playing');
+    targetIdx = playIdx !== -1 ? playIdx : 0;
+    currentSourceId = detectedSources[targetIdx].id;
+  }
+  activeMediaIdx = Math.max(0, Math.min(detectedSources.length - 1, targetIdx));
+
+  // 1. Render navigation pills
   mediaSourcePills.innerHTML = detectedSources
     .map((s, idx) => {
       const isPlaying = s.state === 'playing';
       const isActive = idx === activeMediaIdx;
       return `
-        <button class="source-pill ${isActive ? 'active' : ''} ${isPlaying ? 'playing' : ''}" data-idx="${idx}" title="Switch to ${s.name}">
+        <button class="source-pill ${isActive ? 'active' : ''} ${isPlaying ? 'playing' : ''}" data-idx="${idx}" data-id="${s.id}" title="Switch to ${s.name}">
           ${isPlaying ? '<span class="live-dot"></span>' : ''}
           <span>${s.name}</span>
         </button>
@@ -595,146 +660,272 @@ function renderMediaCarousel() {
     pill.addEventListener('click', (e) => {
       e.stopPropagation();
       activeMediaIdx = parseInt(pill.dataset.idx, 10);
+      currentSourceId = pill.dataset.id;
       renderMediaCarousel();
     });
   });
 
-  // Render sliding cards in track
-  mediaCarouselTrack.innerHTML = detectedSources
-    .map((s, idx) => {
+  // 2. Check if track cards need full rebuild or in-place update
+  const newIds = detectedSources.map((s) => s.id).join('|');
+  const currentCardEls = Array.from(mediaCarouselTrack.querySelectorAll('.media-card-screen'));
+  const oldIds = currentCardEls.map((el) => el.dataset.id).join('|');
+
+  if (newIds !== oldIds || currentCardEls.length === 0) {
+    // Full DOM rebuild
+    mediaCarouselTrack.innerHTML = detectedSources
+      .map((s) => {
+        const isPlaying = s.state === 'playing';
+        const isLoFi = s.id === 'lofi';
+        const durationSecs = s.duration || 300;
+        const positionSecs = s.position || 0;
+        const progressPct = durationSecs > 0 ? (positionSecs / durationSecs) * 100 : 0;
+        const vol = typeof s.volume === 'number' ? s.volume : 75;
+
+        return `
+          <div class="media-card-screen" data-id="${s.id}">
+            <div class="media-card-header">
+              <div class="source-badge">
+                <span class="app-icon-circle ${s.icon}">${getAppIconSvg(s.icon)}</span>
+                <span class="app-name-label">${s.name}</span>
+              </div>
+              <div class="status-pill ${isPlaying ? 'playing' : ''}">
+                ${isPlaying ? '▶ Active' : '⏸ Idle'}
+              </div>
+            </div>
+
+            <div class="media-card-center">
+              <div class="track-details">
+                <div class="now-playing-title" title="${s.title}">${s.title}</div>
+                <div class="now-playing-artist" title="${s.artist}">${s.artist}</div>
+              </div>
+              <div class="sound-wave ${isPlaying ? 'playing' : ''}">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+
+            <!-- Controls: Prev, Play/Pause, Next -->
+            <div class="media-card-controls">
+              <button class="ctrl-btn card-prev" data-id="${s.id}" title="Previous Track">
+                <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+              </button>
+              <button class="ctrl-btn play-btn card-playpause" data-id="${s.id}" title="${isPlaying ? 'Pause' : 'Play'}">
+                ${isPlaying
+                  ? '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
+                  : '<svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>'
+                }
+              </button>
+              <button class="ctrl-btn card-next" data-id="${s.id}" title="Next Track">
+                <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+              </button>
+
+              ${isLoFi ? `
+                <select class="lofi-select" id="lofiSelect" title="Select Lo-Fi Channel">
+                  ${SOUNDSCAPES.map((sc, i) => `<option value="${i}" ${i === loFiSoundscapeIdx ? 'selected' : ''}>${sc.title}</option>`).join('')}
+                </select>
+              ` : ''}
+            </div>
+
+            <!-- Seek Slider Row -->
+            <div class="seek-row">
+              <span class="time-stamp time-cur">${formatSecs(positionSecs)}</span>
+              <div class="slider-container">
+                <input type="range" class="custom-slider card-seek" min="0" max="100" value="${progressPct}" step="0.5" data-id="${s.id}" data-dur="${durationSecs}" />
+                <div class="slider-fill" style="width: ${progressPct}%;"></div>
+              </div>
+              <span class="time-stamp time-tot">${formatSecs(durationSecs)}</span>
+            </div>
+
+            <!-- Volume Slider Row -->
+            <div class="volume-row">
+              <button class="vol-icon-btn card-mute" data-id="${s.id}" title="Mute/Unmute">
+                <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              </button>
+              <div class="slider-container">
+                <input type="range" class="custom-slider card-vol" min="0" max="100" value="${vol}" data-id="${s.id}" />
+                <div class="slider-fill" style="width: ${vol}%;"></div>
+              </div>
+              <span class="vol-num">${vol}%</span>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    // Attach robust control event listeners
+    mediaCarouselTrack.querySelectorAll('.media-card-screen').forEach((card) => {
+      const id = card.dataset.id;
+
+      card.querySelector('.card-playpause').addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleMediaPlayPause(id);
+      });
+
+      card.querySelector('.card-prev').addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleMediaNav(id, 'prev');
+      });
+
+      card.querySelector('.card-next').addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleMediaNav(id, 'next');
+      });
+
+      const seekSlider = card.querySelector('.card-seek');
+      const startSeek = () => { isSeekingMap[id] = true; };
+      seekSlider.addEventListener('pointerdown', startSeek);
+      seekSlider.addEventListener('mousedown', startSeek);
+      seekSlider.addEventListener('touchstart', startSeek, { passive: true });
+
+      seekSlider.addEventListener('input', (e) => {
+        isSeekingMap[id] = true;
+        const pct = parseFloat(e.target.value);
+        card.querySelector('.seek-row .slider-fill').style.width = `${pct}%`;
+        const dur = parseFloat(e.target.dataset.dur) || 300;
+        const targetSec = (pct / 100) * dur;
+        card.querySelector('.time-cur').textContent = formatSecs(targetSec);
+        const s = detectedSources.find((x) => x.id === id);
+        if (s) s.position = targetSec;
+      });
+
+      seekSlider.addEventListener('change', (e) => {
+        const pct = parseFloat(e.target.value);
+        const dur = parseFloat(e.target.dataset.dur) || 300;
+        const targetSec = (pct / 100) * dur;
+        handleMediaSeek(id, targetSec);
+      });
+
+      const volSlider = card.querySelector('.card-vol');
+      volSlider.addEventListener('pointerdown', () => { isVolumingMap[id] = true; });
+      volSlider.addEventListener('input', (e) => {
+        const v = parseInt(e.target.value, 10);
+        card.querySelector('.volume-row .slider-fill').style.width = `${v}%`;
+        card.querySelector('.vol-num').textContent = `${v}%`;
+        handleMediaVolume(id, v);
+      });
+      volSlider.addEventListener('change', (e) => {
+        const v = parseInt(e.target.value, 10);
+        handleMediaVolume(id, v);
+        setTimeout(() => { isVolumingMap[id] = false; }, 400);
+      });
+
+      const muteBtn = card.querySelector('.card-mute');
+      if (muteBtn) {
+        muteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const curV = parseInt(volSlider.value, 10);
+          const newV = curV > 0 ? 0 : 75;
+          volSlider.value = newV;
+          card.querySelector('.volume-row .slider-fill').style.width = `${newV}%`;
+          card.querySelector('.vol-num').textContent = `${newV}%`;
+          handleMediaVolume(id, newV);
+        });
+      }
+
+      const lofiSelect = card.querySelector('#lofiSelect');
+      if (lofiSelect) {
+        lofiSelect.addEventListener('change', (e) => {
+          loFiSoundscapeIdx = parseInt(e.target.value, 10);
+          changeLoFiTrack(loFiSoundscapeIdx);
+        });
+      }
+    });
+  } else {
+    // In-place DOM updates: does not destroy DOM, preserving slider thumb and clicks
+    detectedSources.forEach((s) => {
+      const card = mediaCarouselTrack.querySelector(`.media-card-screen[data-id="${s.id}"]`);
+      if (!card) return;
+
       const isPlaying = s.state === 'playing';
-      const isLoFi = s.id === 'lofi';
       const durationSecs = s.duration || 300;
       const positionSecs = s.position || 0;
       const progressPct = durationSecs > 0 ? (positionSecs / durationSecs) * 100 : 0;
+      const vol = typeof s.volume === 'number' ? s.volume : 75;
 
-      return `
-        <div class="media-card-screen" data-id="${s.id}">
-          <div class="media-card-header">
-            <div class="source-badge">
-              <span class="app-icon-circle ${s.icon}">${getAppIconSvg(s.icon)}</span>
-              <span class="app-name-label">${s.name}</span>
-            </div>
-            <div class="status-pill ${isPlaying ? 'playing' : ''}">
-              ${isPlaying ? '▶ Active' : '⏸ Idle'}
-            </div>
-          </div>
+      const titleEl = card.querySelector('.now-playing-title');
+      if (titleEl && titleEl.textContent !== s.title) {
+        titleEl.textContent = s.title;
+        titleEl.title = s.title;
+      }
 
-          <div class="media-card-center">
-            <div class="track-details">
-              <div class="now-playing-title">${s.title}</div>
-              <div class="now-playing-artist">${s.artist}</div>
-            </div>
-            <div class="sound-wave ${isPlaying ? 'playing' : ''}">
-              <span></span><span></span><span></span><span></span><span></span>
-            </div>
-          </div>
+      const artistEl = card.querySelector('.now-playing-artist');
+      if (artistEl && artistEl.textContent !== s.artist) {
+        artistEl.textContent = s.artist;
+        artistEl.title = s.artist;
+      }
 
-          <!-- Controls: Prev, Play/Pause, Next -->
-          <div class="media-card-controls">
-            <button class="ctrl-btn card-prev" data-id="${s.id}" title="Previous">
-              <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
-            </button>
-            <button class="ctrl-btn play-btn card-playpause" data-id="${s.id}" title="Play / Pause">
-              ${isPlaying
-                ? '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
-                : '<svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>'
-              }
-            </button>
-            <button class="ctrl-btn card-next" data-id="${s.id}" title="Next">
-              <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-            </button>
+      const statusPill = card.querySelector('.status-pill');
+      if (statusPill) {
+        statusPill.className = `status-pill ${isPlaying ? 'playing' : ''}`;
+        statusPill.textContent = isPlaying ? '▶ Active' : '⏸ Idle';
+      }
 
-            ${isLoFi ? `
-              <select class="lofi-select" id="lofiSelect" title="Select Lo-Fi Channel">
-                ${SOUNDSCAPES.map((sc, i) => `<option value="${i}" ${i === loFiSoundscapeIdx ? 'selected' : ''}>${sc.title}</option>`).join('')}
-              </select>
-            ` : ''}
-          </div>
+      const soundWave = card.querySelector('.sound-wave');
+      if (soundWave) soundWave.className = `sound-wave ${isPlaying ? 'playing' : ''}`;
 
-          <!-- Seek Slider Row -->
-          <div class="seek-row">
-            <span class="time-stamp time-cur">${formatSecs(positionSecs)}</span>
-            <div class="slider-container">
-              <input type="range" class="custom-slider card-seek" min="0" max="100" value="${progressPct}" step="0.5" data-id="${s.id}" data-dur="${durationSecs}" />
-              <div class="slider-fill" style="width: ${progressPct}%;"></div>
-            </div>
-            <span class="time-stamp time-tot">${formatSecs(durationSecs)}</span>
-          </div>
+      const playBtn = card.querySelector('.card-playpause');
+      if (playBtn) {
+        playBtn.title = isPlaying ? 'Pause' : 'Play';
+        playBtn.innerHTML = isPlaying
+          ? '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
+          : '<svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+      }
 
-          <!-- Volume Slider Row -->
-          <div class="volume-row">
-            <button class="vol-icon-btn card-mute" data-id="${s.id}" title="Mute/Unmute">
-              <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-            </button>
-            <div class="slider-container">
-              <input type="range" class="custom-slider card-vol" min="0" max="100" value="${s.volume || 75}" data-id="${s.id}" />
-              <div class="slider-fill" style="width: ${s.volume || 75}%;"></div>
-            </div>
-            <span class="vol-num">${s.volume || 75}%</span>
-          </div>
-        </div>
-      `;
-    })
-    .join('');
+      if (!isSeekingMap[s.id]) {
+        const seekEl = card.querySelector('.card-seek');
+        const fillEl = card.querySelector('.seek-row .slider-fill');
+        const timeCur = card.querySelector('.time-cur');
+        const timeTot = card.querySelector('.time-tot');
+        if (seekEl) {
+          seekEl.value = progressPct;
+          seekEl.dataset.dur = durationSecs;
+        }
+        if (fillEl) fillEl.style.width = `${progressPct}%`;
+        if (timeCur) timeCur.textContent = formatSecs(positionSecs);
+        if (timeTot) timeTot.textContent = formatSecs(durationSecs);
+      }
+
+      if (!isVolumingMap[s.id]) {
+        const volEl = card.querySelector('.card-vol');
+        const volFill = card.querySelector('.volume-row .slider-fill');
+        const volNum = card.querySelector('.vol-num');
+        if (volEl) volEl.value = vol;
+        if (volFill) volFill.style.width = `${vol}%`;
+        if (volNum) volNum.textContent = `${vol}%`;
+      }
+    });
+  }
 
   // Slide track smoothly to the active card
   mediaCarouselTrack.style.transform = `translateX(-${activeMediaIdx * 100}%)`;
 
-  // Attach control event listeners on cards
-  mediaCarouselTrack.querySelectorAll('.media-card-screen').forEach((card) => {
-    const id = card.dataset.id;
-    const source = detectedSources.find((s) => s.id === id);
-
-    card.querySelector('.card-playpause').addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleMediaPlayPause(id);
-    });
-
-    card.querySelector('.card-prev').addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleMediaNav(id, 'prev');
-    });
-
-    card.querySelector('.card-next').addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleMediaNav(id, 'next');
-    });
-
-    const seekSliderEl = card.querySelector('.card-seek');
-    seekSliderEl.addEventListener('input', (e) => {
-      const pct = parseFloat(e.target.value);
-      card.querySelector('.seek-row .slider-fill').style.width = `${pct}%`;
-      const dur = parseFloat(e.target.dataset.dur) || 300;
-      const targetSec = (pct / 100) * dur;
-      card.querySelector('.time-cur').textContent = formatSecs(targetSec);
-      handleMediaSeek(id, targetSec);
-    });
-
-    const volSliderEl = card.querySelector('.card-vol');
-    volSliderEl.addEventListener('input', (e) => {
-      const v = parseInt(e.target.value, 10);
-      card.querySelector('.volume-row .slider-fill').style.width = `${v}%`;
-      card.querySelector('.vol-num').textContent = `${v}%`;
-      handleMediaVolume(id, v);
-    });
-
-    const lofiSelect = card.querySelector('#lofiSelect');
-    if (lofiSelect) {
-      lofiSelect.addEventListener('change', (e) => {
-        loFiSoundscapeIdx = parseInt(e.target.value, 10);
-        changeLoFiTrack(loFiSoundscapeIdx);
-      });
-    }
-  });
-
   updateCompactCompanion();
+}
+
+// Trackpad horizontal swipe / mouse wheel sliding between screens
+const carouselViewport = document.querySelector('.media-carousel-viewport');
+if (carouselViewport) {
+  let wheelTimeout = null;
+  carouselViewport.addEventListener('wheel', (e) => {
+    if (Math.abs(e.deltaX) > 25 && !wheelTimeout) {
+      if (e.deltaX > 0 && activeMediaIdx < detectedSources.length - 1) {
+        activeMediaIdx++;
+        currentSourceId = detectedSources[activeMediaIdx].id;
+        renderMediaCarousel();
+      } else if (e.deltaX < 0 && activeMediaIdx > 0) {
+        activeMediaIdx--;
+        currentSourceId = detectedSources[activeMediaIdx].id;
+        renderMediaCarousel();
+      }
+      wheelTimeout = setTimeout(() => { wheelTimeout = null; }, 400);
+    }
+  }, { passive: true });
 }
 
 carouselPrevBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   if (activeMediaIdx > 0) {
     activeMediaIdx--;
+    currentSourceId = detectedSources[activeMediaIdx].id;
     renderMediaCarousel();
   }
 });
@@ -743,6 +934,7 @@ carouselNextBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   if (activeMediaIdx < detectedSources.length - 1) {
     activeMediaIdx++;
+    currentSourceId = detectedSources[activeMediaIdx].id;
     renderMediaCarousel();
   }
 });
@@ -765,13 +957,17 @@ function handleMediaPlayPause(id) {
     return;
   }
 
-  // External / System app
-  window.api.sendMediaAction({ source: id, action: 'playpause' });
+  // Instant local UI state update for responsive feedback
   const s = detectedSources.find((x) => x.id === id);
   if (s) {
-    s.state = s.state === 'playing' ? 'paused' : 'playing';
+    const nextState = s.state === 'playing' ? 'paused' : 'playing';
+    s.state = nextState;
+    userToggledState[id] = nextState;
+    lastUserPlayPauseTime = Date.now();
     renderMediaCarousel();
   }
+
+  window.api.sendMediaAction({ source: id, action: 'playpause' });
 }
 
 function handleMediaNav(id, dir) {
@@ -788,7 +984,11 @@ function handleMediaSeek(id, sec) {
     if (audioEl.duration && !isNaN(audioEl.duration)) audioEl.currentTime = sec;
     return;
   }
+  isSeekingMap[id] = true;
+  const s = detectedSources.find((x) => x.id === id);
+  if (s) s.position = sec;
   window.api.sendMediaAction({ source: id, action: 'seek', value: sec });
+  setTimeout(() => { isSeekingMap[id] = false; }, 2000);
 }
 
 function handleMediaVolume(id, vol) {
@@ -797,6 +997,8 @@ function handleMediaVolume(id, vol) {
     if (noiseGain && webAudioCtx) noiseGain.gain.setValueAtTime((vol / 100) * 0.6, webAudioCtx.currentTime);
     return;
   }
+  const s = detectedSources.find((x) => x.id === id);
+  if (s) s.volume = vol;
   window.api.sendMediaAction({ source: id, action: 'volume', value: vol });
 }
 
@@ -824,19 +1026,31 @@ function changeLoFiTrack(idx) {
 // Initial fetch of media sources
 window.api.getMediaSources().then((sources) => {
   detectedSources = sources || [];
-  // If an active playing app exists, default carousel to it
   const playIdx = detectedSources.findIndex((s) => s.state === 'playing');
-  if (playIdx !== -1) activeMediaIdx = playIdx;
+  if (playIdx !== -1) {
+    activeMediaIdx = playIdx;
+    currentSourceId = detectedSources[playIdx].id;
+  }
   renderMediaCarousel();
 });
 
 window.api.onMediaSourcesUpdated((sources) => {
   if (!sources || sources.length === 0) return;
-  // Merge status while keeping lo-fi state
+  const isRecentUserToggle = Date.now() - lastUserPlayPauseTime < 1800;
+
   detectedSources = sources.map((ns) => {
     if (ns.id === 'lofi') {
       const sc = SOUNDSCAPES[loFiSoundscapeIdx];
       return { ...ns, title: sc.title, artist: sc.genre, duration: sc.simDuration, state: isLoFiPlaying ? 'playing' : 'paused' };
+    }
+    // If user recently clicked play/pause, respect user's immediate state until OS updates
+    if (isRecentUserToggle && userToggledState[ns.id] !== undefined) {
+      ns.state = userToggledState[ns.id];
+    }
+    // If user is actively dragging seek on this card or recently sought, preserve position
+    if (isSeekingMap[ns.id]) {
+      const existing = detectedSources.find((x) => x.id === ns.id);
+      if (existing) ns.position = existing.position;
     }
     return ns;
   });
@@ -844,8 +1058,40 @@ window.api.onMediaSourcesUpdated((sources) => {
 });
 
 // ==========================================
-// 9. POWER ACTIONS (WITH SAFETY ARMING)
+// 9. POWER ACTIONS (WITH EXPLICIT WARNING & CONFIRMATION)
 // ==========================================
+const POWER_ICONS = {
+  shutdown: '<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/>',
+  restart: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  sleep: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
+};
+
+function showPowerConfirmation(action) {
+  pendingPowerAction = action;
+  if (!powerConfirmView || !powerGrid) return;
+
+  confirmCard.className = `confirm-card theme-${action}`;
+  confirmIconSvg.innerHTML = POWER_ICONS[action] || '';
+  powerProceedIcon.innerHTML = POWER_ICONS[action] || '';
+
+  if (action === 'shutdown') {
+    confirmHeading.textContent = 'Shut Down Computer?';
+    confirmWarningText.textContent = '⚠️ Warning: All open applications will close and your computer will power off safely.';
+    powerProceedLabel.textContent = 'Shut Down';
+  } else if (action === 'restart') {
+    confirmHeading.textContent = 'Restart Computer?';
+    confirmWarningText.textContent = '⚠️ Warning: The computer will restart immediately. Make sure all your work is saved.';
+    powerProceedLabel.textContent = 'Restart';
+  } else if (action === 'sleep') {
+    confirmHeading.textContent = 'Put Computer to Sleep?';
+    confirmWarningText.textContent = 'Your current desktop session will be paused in low-power sleep mode.';
+    powerProceedLabel.textContent = 'Sleep PC';
+  }
+
+  powerGrid.classList.add('hidden');
+  powerConfirmView.classList.add('active');
+}
+
 powerCards.forEach((card) => {
   card.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -854,46 +1100,34 @@ powerCards.forEach((card) => {
       window.api.powerAction('lock');
       return;
     }
-    if (armingAction === action) {
-      clearTimeout(armingTimer);
-      armingAction = null;
-      resetPowerCards();
-      window.api.powerAction(action);
-    } else {
-      clearTimeout(armingTimer);
-      resetPowerCards();
-      armingAction = action;
-      card.classList.add('armed');
-      card.querySelector('.card-title').textContent = 'Confirm? (3s)';
-      card.querySelector('.card-sub').textContent = 'Click again to proceed';
-
-      armingTimer = setTimeout(() => {
-        armingAction = null;
-        resetPowerCards();
-      }, 3500);
-    }
+    // For shutdown, restart, and sleep: show warning modal with confirmation button to avoid mistakes
+    showPowerConfirmation(action);
   });
 });
 
-function resetPowerCards() {
-  powerCards.forEach((c) => {
-    c.classList.remove('armed');
-    const action = c.dataset.action;
-    if (action === 'lock') {
-      c.querySelector('.card-title').textContent = 'Lock Screen';
-      c.querySelector('.card-sub').textContent = 'Secure workstation';
-    } else if (action === 'sleep') {
-      c.querySelector('.card-title').textContent = 'Sleep PC';
-      c.querySelector('.card-sub').textContent = 'Low-power state';
-    } else if (action === 'restart') {
-      c.querySelector('.card-title').textContent = 'Restart PC';
-      c.querySelector('.card-sub').textContent = 'Reboot computer';
-    } else if (action === 'shutdown') {
-      c.querySelector('.card-title').textContent = 'Shut Down';
-      c.querySelector('.card-sub').textContent = 'Power off safely';
+if (powerConfirmCancelBtn) {
+  powerConfirmCancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hidePowerConfirmation();
+  });
+}
+
+if (powerConfirmProceedBtn) {
+  powerConfirmProceedBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const action = pendingPowerAction;
+    hidePowerConfirmation();
+    if (action) {
+      window.api.powerAction(action);
     }
   });
 }
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    hidePowerConfirmation();
+  }
+});
 
 // ==========================================
 // 10. APP SHORTCUTS LAUNCHER
