@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: https: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
+  <title>Notcha 2.0.1</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="stage">
+    <div id="island" data-state="compact" data-tab="focus">
+
+      <!-- ================= COMPACT PILL ================= -->
+      <div class="layer compact">
+        <div class="c-pill-inner" id="cPillInner">
+          <span class="c-clock" id="cClock">--:--</span>
+          
+          <div class="c-companion" id="cCompanion">
+            <span class="c-dnd-badge" id="cDndBadge" title="Do Not Disturb Active">
+              <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </span>
+            <div class="c-wave" id="cWave" title="Playing Media">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <span class="c-timer" id="cTimerWrap">
+              <svg class="ring" viewBox="0 0 16 16">
+                <circle class="track" cx="8" cy="8" r="6" />
+                <circle class="bar" id="ringBar" cx="8" cy="8" r="6" />
+              </svg>
+              <span id="cTimer">25:00</span>
+            </span>
+            <span class="c-alarm-badge" id="cAlarmBadge" style="display: none;" title="Alarm Set">
+              <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span id="cAlarmTime">--:--</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= EXPANDED ISLAND ================= -->
+      <div class="layer expanded">
+        
+        <!-- Header: Controls & Main Tabs -->
+        <header class="island-header">
+          <button id="hideBtn" class="orb" title="Toggle Auto-hide (Ctrl/Cmd+Alt+N)"></button>
+          
+          <nav class="island-tabs">
+            <button class="tab-btn active" data-tab="focus" title="Focus, Timer & Alarm">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Focus</span>
+            </button>
+            <button class="tab-btn" data-tab="music" title="Multi-App Media Hub">
+              <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              <span>Media</span>
+            </button>
+            <button class="tab-btn" data-tab="power" title="System Power Controls">
+              <svg viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+              <span>Power</span>
+            </button>
+            <button class="tab-btn" data-tab="apps" title="App Shortcuts">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+              <span>Apps</span>
+            </button>
+            <button class="tab-btn" data-tab="clips" title="Clipboard History">
+              <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+              <span>Clips</span>
+            </button>
+          </nav>
+
+          <div class="top-actions">
+            <button id="pinBtn" class="icon-btn" title="Keep Island Open">
+              <svg viewBox="0 0 24 24"><path d="M14 3l7 7-2 1-3 3 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 3-3z"/></svg>
+            </button>
+            <button id="quitBtn" class="icon-btn close-btn" title="Quit Notcha">
+              <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Body: Tab Panels -->
+        <main class="island-body">
+
+          <!-- ================= 1. FOCUS PANEL ================= -->
+          <section class="panel active" id="panelFocus">
+            
+            <!-- Focus Toolbar: DND & Sub-tabs -->
+            <div class="focus-toolbar">
+              <button id="dndBtn" class="dnd-pill-btn" title="Toggle Do Not Disturb">
+                <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <span id="dndText">DND: OFF</span>
+              </button>
+
+              <div class="focus-subtabs">
+                <button class="subtab-btn active" data-sub="session">🎯 Focus Session</button>
+                <button class="subtab-btn" data-sub="timer">⏱ Timer</button>
+                <button class="subtab-btn" data-sub="alarm">⏰ Alarm</button>
+              </div>
+            </div>
+
+            <!-- Sub-view 1: Focus Session -->
+            <div class="subview active" id="subSession">
+              <div class="task-input-wrap">
+                <input type="text" id="focusTaskInput" class="task-input" placeholder="What task are you working on? (e.g. Code Notcha, Study, Write...)" />
+              </div>
+
+              <div class="focus-main-content">
+                <div class="focus-clock-side">
+                  <div class="big-time">
+                    <span id="eTime">--:--</span>
+                    <span id="eSec" class="sec">00</span>
+                  </div>
+                  <div id="eDate" class="date-str">Loading...</div>
+                </div>
+
+                <div class="focus-controls-side">
+                  <div class="stepper-row">
+                    <div class="stepper">
+                      <button id="timeDecBtn" class="step-btn" title="Decrease 5m">−</button>
+                      <span id="focusDurationLabel" class="dur-label">25m</span>
+                      <button id="timeIncBtn" class="step-btn" title="Increase 5m">+</button>
+                    </div>
+                    <div class="presets">
+                      <button class="preset-chip" data-min="15">15m</button>
+                      <button class="preset-chip active" data-min="25">25m</button>
+                      <button class="preset-chip" data-min="45">45m</button>
+                      <button class="preset-chip" data-min="60">60m</button>
+                      <button class="preset-chip" data-min="90">90m</button>
+                    </div>
+                  </div>
+
+                  <div class="timer-controls">
+                    <button id="timerBtn" class="primary-btn">
+                      <svg class="btn-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      <span id="timerBtnText">Start Focus (25m)</span>
+                    </button>
+                    <button id="timerResetBtn" class="icon-btn" title="Reset Session" style="display: none;">
+                      <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-view 2: Quick Timer -->
+            <div class="subview" id="subTimer">
+              <div class="task-input-wrap">
+                <input type="text" id="quickTimerLabel" class="task-input" placeholder="Timer label (e.g. Tea brew, Oven, Zoom meeting in 15m)..." />
+              </div>
+
+              <div class="quick-timer-body">
+                <div class="timer-digits-row">
+                  <div class="digit-box">
+                    <input type="number" id="qtHours" min="0" max="23" value="0" />
+                    <span>hr</span>
+                  </div>
+                  <span class="colon">:</span>
+                  <div class="digit-box">
+                    <input type="number" id="qtMins" min="0" max="59" value="10" />
+                    <span>min</span>
+                  </div>
+                  <span class="colon">:</span>
+                  <div class="digit-box">
+                    <input type="number" id="qtSecs" min="0" max="59" value="0" />
+                    <span>sec</span>
+                  </div>
+                </div>
+
+                <div class="qt-chips-row">
+                  <button class="qt-chip" data-add="60">+1m</button>
+                  <button class="qt-chip" data-add="300">+5m</button>
+                  <button class="qt-chip" data-add="600">+10m</button>
+                  <button class="qt-chip" data-add="900">+15m</button>
+                  <button class="qt-chip" data-add="1800">+30m</button>
+                </div>
+
+                <div class="qt-actions-row">
+                  <button id="qtStartBtn" class="primary-btn">Start Timer</button>
+                  <button id="qtResetBtn" class="icon-btn" title="Reset Timer" style="display: none;">
+                    <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-view 3: Alarm Clock -->
+            <div class="subview" id="subAlarm">
+              <div class="task-input-wrap">
+                <input type="text" id="alarmLabelInput" class="task-input" placeholder="Alarm note (e.g. Standup Meeting, Medicine, Break)..." />
+              </div>
+
+              <div class="alarm-body">
+                <div class="alarm-picker-row">
+                  <div class="alarm-input-wrap">
+                    <input type="time" id="alarmTimeInput" class="alarm-time-input" />
+                  </div>
+                  <button id="alarmToggleBtn" class="primary-btn alarm-btn">Set Alarm</button>
+                </div>
+                <div class="alarm-status-text" id="alarmStatusText">No alarm set</div>
+              </div>
+            </div>
+
+          </section>
+
+          <!-- ================= 2. MEDIA PANEL ================= -->
+          <section class="panel" id="panelMusic">
+            <div class="media-container" id="mediaContainer">
+              <!-- Dynamically rendered active playing media card or empty state -->
+            </div>
+          </section>
+
+          <!-- ================= 3. POWER PANEL ================= -->
+          <section class="panel" id="panelPower">
+            <div class="power-grid" id="powerGrid">
+              <button class="power-card" id="lockPcBtn" data-action="lock">
+                <div class="card-icon lock-icon">
+                  <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <div class="card-texts">
+                  <span class="card-title">Lock Screen</span>
+                  <span class="card-sub">Secure workstation</span>
+                </div>
+              </button>
+
+              <button class="power-card" id="sleepPcBtn" data-action="sleep">
+                <div class="card-icon sleep-icon">
+                  <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </div>
+                <div class="card-texts">
+                  <span class="card-title">Sleep PC</span>
+                  <span class="card-sub">Low-power state</span>
+                </div>
+              </button>
+
+              <button class="power-card" id="restartPcBtn" data-action="restart">
+                <div class="card-icon restart-icon">
+                  <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </div>
+                <div class="card-texts">
+                  <span class="card-title">Restart PC</span>
+                  <span class="card-sub">Reboot computer</span>
+                </div>
+              </button>
+
+              <button class="power-card danger" id="shutdownPcBtn" data-action="shutdown">
+                <div class="card-icon shutdown-icon">
+                  <svg viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                </div>
+                <div class="card-texts">
+                  <span class="card-title">Shut Down</span>
+                  <span class="card-sub">Power off safely</span>
+                </div>
+              </button>
+            </div>
+
+            <!-- Confirmation Warning Screen -->
+            <div class="power-confirm-view" id="powerConfirmView">
+              <div class="confirm-card" id="confirmCard">
+                <div class="confirm-icon-badge" id="confirmIconBadge">
+                  <svg id="confirmIconSvg" viewBox="0 0 24 24"></svg>
+                </div>
+                <div class="confirm-info">
+                  <div class="confirm-heading" id="confirmHeading">Shut Down Computer?</div>
+                  <div class="confirm-warning-text" id="confirmWarningText">⚠️ Warning: All open applications will close and unsaved work will be lost.</div>
+                </div>
+                <div class="confirm-buttons">
+                  <button class="confirm-btn-cancel" id="powerConfirmCancelBtn" type="button">Cancel</button>
+                  <button class="confirm-btn-action" id="powerConfirmProceedBtn" type="button">
+                    <svg viewBox="0 0 24 24" id="powerProceedIcon"></svg>
+                    <span id="powerProceedLabel">Shut Down</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ================= 4. APPS PANEL ================= -->
+          <section class="panel" id="panelApps">
+            <div class="apps-grid" id="appsGrid">
+              <button class="app-item" data-app="browser" title="Open Web Browser">
+                <div class="app-badge"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+                <span>Browser</span>
+              </button>
+              <button class="app-item" data-app="terminal" title="Open Terminal">
+                <div class="app-badge"><svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+                <span>Terminal</span>
+              </button>
+              <button class="app-item" data-app="vscode" title="Open Code Editor">
+                <div class="app-badge"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+                <span>VS Code</span>
+              </button>
+              <button class="app-item" data-app="finder" title="Open Files / Explorer">
+                <div class="app-badge"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+                <span>Files</span>
+              </button>
+              <button class="app-item" data-app="music" title="Open Music / Spotify">
+                <div class="app-badge"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+                <span>Music</span>
+              </button>
+              <button class="app-item" data-app="calculator" title="Open Calculator">
+                <div class="app-badge"><svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"/></svg></div>
+                <span>Calc</span>
+              </button>
+              <button class="app-item" data-app="notes" title="Open Notes">
+                <div class="app-badge"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+                <span>Notes</span>
+              </button>
+              <button class="app-item" data-app="settings" title="System Settings">
+                <div class="app-badge"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+                <span>Settings</span>
+              </button>
+            </div>
+            <div class="custom-app-row">
+              <input type="text" id="customAppInput" class="custom-input" placeholder="Launch path, app, or URL (e.g. github.com)..." />
+              <button id="customAppLaunchBtn" class="pill-btn">Launch</button>
+            </div>
+          </section>
+
+          <!-- ================= 5. CLIPBOARD PANEL ================= -->
+          <section class="panel" id="panelClips">
+            <div class="clips-header">
+              <input type="text" id="clipSearchInput" class="clip-search" placeholder="Search copied snippets..." />
+              <button id="clearClipsBtn" class="tag-btn" title="Clear all history">Clear All</button>
+            </div>
+            <div class="clips-list" id="clipsList">
+              <div class="empty-clips">No copied text yet. Copy anything and it will appear here!</div>
+            </div>
+          </section>
+
+        </main>
+
+      </div>
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+{
+  "name": "notcha",
+  "version": "2.0.1",
+  "description": "Dynamic island desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, and power controls",
+  "main": "main.js",
+  "author": "Ukacha Juma",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:all": "electron-builder -mw",
+    "app": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.ukacha.notcha",
+    "productName": "Notcha",
+    "directories": {
+      "buildResources": "build"
+    },
+    "icon": "build/icon.png",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "renderer.js",
+      "logo.png",
+      "media-helper",
+      "nowplaying-query.swift"
+    ],
+    "asarUnpack": [
+      "media-helper",
+      "nowplaying-query.swift"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    }
+  }
+}
