@@ -143,9 +143,10 @@ publish_release() {
   ensure_auth
   track_changes "Prepare Notcha v${version} release"
 
-  local stage_dir="$ROOT_DIR/.tmp-gh-release"
+  STAGE_DIR="$ROOT_DIR/.tmp-gh-release"
+  local stage_dir="$STAGE_DIR"
   rm -rf "$stage_dir"
-  trap 'rm -rf "$stage_dir"' EXIT
+  trap 'rm -rf "${STAGE_DIR:-}"' EXIT
 
   log "Cloning ${REPO_SLUG} (main) into staging area..."
   gh repo clone "$REPO_SLUG" "$stage_dir" -- --branch main --single-branch
