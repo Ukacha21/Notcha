@@ -1,4 +1,5 @@
 import Foundation
+import CoreAudio
 
 guard let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW) else {
     print("{}")
@@ -12,6 +13,49 @@ typealias MRIsPlayingFn = @convention(c) (DispatchQueue, @escaping (Bool) -> Voi
 var clientName = "System"
 var clientBundle = ""
 var clientIcon = "system"
+
+func getSystemOutputVolume() -> Int {
+    var defaultOutputDeviceID = AudioDeviceID(0)
+    var defaultOutputDeviceIDSize = UInt32(MemoryLayout.size(ofValue: defaultOutputDeviceID))
+
+    var getDefaultOutputDevicePropertyAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioHardwarePropertyDefaultOutputDevice),
+        mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+
+    let status1 = AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject),
+        &getDefaultOutputDevicePropertyAddress,
+        0,
+        nil,
+        &defaultOutputDeviceIDSize,
+        &defaultOutputDeviceID
+    )
+
+    guard status1 == noErr else { return 50 }
+
+    var volume = Float32(0.0)
+    var volumeSize = UInt32(MemoryLayout.size(ofValue: volume))
+    var volumePropertyAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioDevicePropertyVolumeScalar),
+        mScope: AudioObjectPropertyScope(kAudioDevicePropertyScopeOutput),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+
+    let status2 = AudioObjectGetPropertyData(
+        defaultOutputDeviceID,
+        &volumePropertyAddress,
+        0,
+        nil,
+        &volumeSize,
+        &volume
+    )
+    if status2 == noErr {
+        return Int(round(volume * 100))
+    }
+    return 50
+}
 
 // Safety timeout: exit after 900ms so query never hangs
 Timer.scheduledTimer(withTimeInterval: 0.9, repeats: false) { _ in
@@ -67,6 +111,8 @@ if let symClient = dlsym(handle, "MRMediaRemoteGetNowPlayingClient"),
                     }
                 }
 
+                let currentVol = getSystemOutputVolume()
+
                 let json: [String: Any] = [
                     "client": clientName,
                     "bundle": clientBundle,
@@ -76,7 +122,8 @@ if let symClient = dlsym(handle, "MRMediaRemoteGetNowPlayingClient"),
                     "duration": duration > 0 ? duration : 300,
                     "elapsed": calculatedElapsed >= 0 ? calculatedElapsed : 0,
                     "isPlaying": isPlaying,
-                    "state": isPlaying ? "playing" : "paused"
+                    "state": isPlaying ? "playing" : "paused",
+                    "volume": currentVol
                 ]
 
                 if let data = try? JSONSerialization.data(withJSONObject: json, options: []),

@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CoreAudio
 
 // MARK: - Private Framework Typedefs
 typealias MRMediaRemoteSendCommandFn = @convention(c) (Int, AnyObject?) -> Bool
@@ -11,6 +12,90 @@ typealias SACLockScreenImmediateFn = @convention(c) () -> Void
 let mrHandle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW)
 let loginHandle = dlopen("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login", RTLD_NOW)
 
+// MARK: - CoreAudio Volume Control
+func getSystemOutputVolume() -> Int {
+    var defaultOutputDeviceID = AudioDeviceID(0)
+    var defaultOutputDeviceIDSize = UInt32(MemoryLayout.size(ofValue: defaultOutputDeviceID))
+
+    var getDefaultOutputDevicePropertyAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioHardwarePropertyDefaultOutputDevice),
+        mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+
+    let status1 = AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject),
+        &getDefaultOutputDevicePropertyAddress,
+        0,
+        nil,
+        &defaultOutputDeviceIDSize,
+        &defaultOutputDeviceID
+    )
+
+    guard status1 == noErr else { return 50 }
+
+    var volume = Float32(0.0)
+    var volumeSize = UInt32(MemoryLayout.size(ofValue: volume))
+    var volumePropertyAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioDevicePropertyVolumeScalar),
+        mScope: AudioObjectPropertyScope(kAudioDevicePropertyScopeOutput),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+
+    let status2 = AudioObjectGetPropertyData(
+        defaultOutputDeviceID,
+        &volumePropertyAddress,
+        0,
+        nil,
+        &volumeSize,
+        &volume
+    )
+    if status2 == noErr {
+        return Int(round(volume * 100))
+    }
+    return 50
+}
+
+func setSystemOutputVolume(_ vol: Int) -> Bool {
+    var defaultOutputDeviceID = AudioDeviceID(0)
+    var defaultOutputDeviceIDSize = UInt32(MemoryLayout.size(ofValue: defaultOutputDeviceID))
+
+    var getDefaultOutputDevicePropertyAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioHardwarePropertyDefaultOutputDevice),
+        mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+
+    let status1 = AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject),
+        &getDefaultOutputDevicePropertyAddress,
+        0,
+        nil,
+        &defaultOutputDeviceIDSize,
+        &defaultOutputDeviceID
+    )
+
+    guard status1 == noErr else { return false }
+
+    var volume = Float32(max(0, min(100, vol))) / 100.0
+    let volumeSize = UInt32(MemoryLayout.size(ofValue: volume))
+    var volumePropertyAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioDevicePropertyVolumeScalar),
+        mScope: AudioObjectPropertyScope(kAudioDevicePropertyScopeOutput),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+
+    let status2 = AudioObjectSetPropertyData(
+        defaultOutputDeviceID,
+        &volumePropertyAddress,
+        0,
+        nil,
+        volumeSize,
+        &volume
+    )
+    return status2 == noErr
+}
+
 // MARK: - Lock Screen
 func lockScreen() {
     if let login = loginHandle, let sym = dlsym(login, "SACLockScreenImmediate") {
@@ -19,7 +104,6 @@ func lockScreen() {
         print("Locked screen successfully")
         fflush(stdout)
     } else {
-        // Fallback to pmset displaysleepnow
         let task = Process()
         task.launchPath = "/usr/bin/pmset"
         task.arguments = ["displaysleepnow"]
@@ -34,7 +118,6 @@ func sendMediaCommand(_ cmd: String, value: Double? = nil) {
     if cmd == "seek", let sec = value {
         var success = false
         if let mr = mrHandle {
-            // Command 24: SeekToPlaybackPosition with target timestamp
             if let symCmd = dlsym(mr, "MRMediaRemoteSendCommand") {
                 let sendCmd = unsafeBitCast(symCmd, to: MRMediaRemoteSendCommandFn.self)
                 let options: [String: Any] = [
@@ -179,7 +262,8 @@ func getNowPlaying() {
                 "duration": duration > 0 ? duration : 300,
                 "elapsed": elapsed >= 0 ? elapsed : 0,
                 "isPlaying": isPlaying,
-                "state": isPlaying ? "playing" : "paused"
+                "state": isPlaying ? "playing" : "paused",
+                "volume": getSystemOutputVolume()
             ]
 
             if let data = try? JSONSerialization.data(withJSONObject: json, options: []),
@@ -211,6 +295,14 @@ if args.count > 1 {
     let cmd = args[1]
     if cmd == "lock" {
         lockScreen()
+    } else if cmd == "getvolume" {
+        print(getSystemOutputVolume())
+        fflush(stdout)
+    } else if cmd == "volume" || cmd == "setvolume" {
+        let v = args.count > 2 ? Int(args[2]) ?? 50 : 50
+        _ = setSystemOutputVolume(v)
+        print("OK")
+        fflush(stdout)
     } else if cmd == "nowplaying" {
         getNowPlaying()
     } else if cmd == "media" {
@@ -218,11 +310,10 @@ if args.count > 1 {
         let val = args.count > 3 ? Double(args[3]) : nil
         sendMediaCommand(action, value: val)
     } else {
-        // Fallback backward compatibility for `media-helper playpause` etc.
         let val = args.count > 2 ? Double(args[2]) : nil
         sendMediaCommand(cmd, value: val)
     }
 } else {
-    print("Usage: media-helper [lock|nowplaying|media <action> [val]]")
+    print("Usage: media-helper [lock|getvolume|volume <0-100>|nowplaying|media <action> [val]]")
     fflush(stdout)
 }

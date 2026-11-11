@@ -37,7 +37,7 @@ function createWindow() {
     fullscreenable: false,
     enableLargerThanScreen: true,
     show: false,
-    icon: path.join(__dirname, 'logo2.png'),
+    icon: path.join(__dirname, 'logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -95,6 +95,16 @@ function getAssetPath(file) {
 const mediaHelperPath = getAssetPath('media-helper');
 const nowPlayingScriptPath = getAssetPath('nowplaying-query.swift');
 
+let cachedSystemVolume = 50;
+if (process.platform === 'darwin') {
+  execFile(mediaHelperPath, ['getvolume'], (err, stdout) => {
+    if (!err && stdout && stdout.trim()) {
+      const v = parseInt(stdout.trim(), 10);
+      if (!isNaN(v)) cachedSystemVolume = v;
+    }
+  });
+}
+
 // Run an AppleScript safely via a temp file
 function runAppleScript(script) {
   return new Promise((resolve) => {
@@ -151,6 +161,9 @@ function queryNowPlaying() {
         if (!data.title || data.title === 'No Media Playing' || data.title === 'Media Player' && !data.isPlaying) {
           return resolve(null);
         }
+        if (typeof data.volume === 'number') {
+          cachedSystemVolume = data.volume;
+        }
         resolve({
           id: 'nowplaying',
           name: data.client || 'Now Playing',
@@ -161,7 +174,7 @@ function queryNowPlaying() {
           artist: data.artist || data.client,
           position: Math.round(data.elapsed || 0),
           duration: Math.round(data.duration || 300),
-          volume: 80,
+          volume: typeof data.volume === 'number' ? data.volume : cachedSystemVolume,
         });
       } catch (_) {
         resolve(null);
@@ -334,203 +347,102 @@ end if`;
       artist: 'Local Media / Video Stream',
       position: isOk ? (parseFloat(parts[3]) || 0) : 0,
       duration: isOk && parseFloat(parts[4]) > 0 ? parseFloat(parts[4]) : 300,
-      volume: 80,
+      volume: cachedSystemVolume,
     });
   });
 }
 
-// Queries Web Browsers for active YouTube tabs
-function queryYouTube() {
-  return new Promise(async (resolve) => {
-    if (process.platform !== 'darwin') return resolve(null);
-    const script = `set foundTitle to ""
-set foundURL to ""
-
--- Check Brave Browser
-if application "Brave Browser" is running then
-  tell application "Brave Browser"
-    repeat with w in windows
-      repeat with t in tabs of w
-        if title of t contains "YouTube" then
-          set foundTitle to title of t
-          set foundURL to URL of t
-          exit repeat
-        end if
-      end repeat
-      if foundTitle is not "" then exit repeat
-    end repeat
-  end tell
-end if
-
--- Check Google Chrome if not found
-if foundTitle is "" and application "Google Chrome" is running then
-  tell application "Google Chrome"
-    repeat with w in windows
-      repeat with t in tabs of w
-        if title of t contains "YouTube" then
-          set foundTitle to title of t
-          set foundURL to URL of t
-          exit repeat
-        end if
-      end repeat
-      if foundTitle is not "" then exit repeat
-    end repeat
-  end tell
-end if
-
--- Check Safari if not found
-if foundTitle is "" and application "Safari" is running then
-  tell application "Safari"
-    repeat with w in windows
-      repeat with t in tabs of w
-        if name of t contains "YouTube" then
-          set foundTitle to name of t
-          set foundURL to URL of t
-          exit repeat
-        end if
-      end repeat
-      if foundTitle is not "" then exit repeat
-    end repeat
-  end tell
-end if
-
-if foundTitle is not "" then
-  return "OK|" & foundTitle & "|" & foundURL
-else
-  return "NOT_FOUND"
-end if`;
-    const { err, stdout } = await runAppleScript(script);
-    if (err || !stdout || stdout.includes('NOT_FOUND')) return resolve(null);
-    const parts = stdout.trim().split('|');
-    if (parts[0] === 'OK') {
-      let cleanTitle = parts[1].replace(/ - YouTube/i, '').trim();
-      cleanTitle = cleanTitle.replace(/^\(\d+\)\s*/, '');
-      resolve({
-        id: 'youtube',
-        name: 'YouTube & Web',
-        icon: 'youtube',
-        state: 'playing',
-        title: cleanTitle || 'YouTube Video',
-        artist: 'Web Browser Audio',
-        position: 0,
-        duration: 300,
-        volume: 85,
-      });
-    } else {
-      resolve(null);
-    }
-  });
-}
-
-// Queries Telegram Desktop
-function queryTelegram() {
-  return new Promise((resolve) => {
-    if (process.platform !== 'darwin') return resolve(null);
-    exec("ps -ax -o comm | grep -i 'Telegram' | grep -v 'grep'", (err, stdout) => {
-      if (err || !stdout.trim()) return resolve(null);
-      resolve({
-        id: 'telegram',
-        name: 'Telegram Audio',
-        icon: 'telegram',
-        state: 'idle',
-        title: 'Telegram Messenger',
-        artist: 'Voice & Media Playback',
-        position: 0,
-        duration: 180,
-        volume: 80,
-      });
-    });
-  });
-}
-
-async function getAllMediaSources() {
-  const [nowPlaying, appleMusic, spotify, vlc, youtube, telegram] = await Promise.all([
+// Active Media Detector (only returns the app currently playing sounds or recently paused)
+async function getActiveMediaSource() {
+  const [nowPlaying, appleMusic, spotify, vlc] = await Promise.all([
     queryNowPlaying(),
     queryAppleMusic(),
     querySpotify(),
     queryVLC(),
-    queryYouTube(),
-    queryTelegram(),
   ]);
 
-  const sources = [];
-
-  // 1. If system NowPlaying is active, prioritize it
-  if (nowPlaying) {
-    sources.push(nowPlaying);
-  }
-
-  // 2. Add individual media players if running and not duplicate of nowplaying
-  if (appleMusic) {
-    const isDup = nowPlaying && (nowPlaying.icon === 'apple' || nowPlaying.name.toLowerCase().includes('music'));
-    if (!isDup) sources.push(appleMusic);
-    else if (nowPlaying) {
-      // Sync volume & accurate position from Apple Music
-      nowPlaying.volume = appleMusic.volume;
-      if (appleMusic.position > 0) nowPlaying.position = appleMusic.position;
+  // 1. Is there an app actively playing sounds right now?
+  if (nowPlaying && nowPlaying.state === 'playing') {
+    const lowerClient = (nowPlaying.name || '').toLowerCase();
+    const lowerBundle = (nowPlaying.bundle || '').toLowerCase();
+    if (nowPlaying.icon === 'apple' || lowerClient.includes('music') || lowerBundle.includes('music')) {
+      nowPlaying.id = 'apple-music';
+      if (appleMusic) {
+        nowPlaying.volume = appleMusic.volume;
+        if (appleMusic.position > 0) nowPlaying.position = appleMusic.position;
+        if (appleMusic.duration > 0) nowPlaying.duration = appleMusic.duration;
+      }
+    } else if (nowPlaying.icon === 'spotify' || lowerClient.includes('spotify') || lowerBundle.includes('spotify')) {
+      nowPlaying.id = 'spotify';
+      if (spotify) {
+        nowPlaying.volume = spotify.volume;
+        if (spotify.position > 0) nowPlaying.position = spotify.position;
+        if (spotify.duration > 0) nowPlaying.duration = spotify.duration;
+      }
+    } else if (nowPlaying.icon === 'vlc' || lowerClient.includes('vlc') || lowerBundle.includes('vlc')) {
+      nowPlaying.id = 'vlc';
+      if (vlc && vlc.position > 0) nowPlaying.position = vlc.position;
     }
+    return nowPlaying;
   }
 
-  if (spotify) {
-    const isDup = nowPlaying && (nowPlaying.icon === 'spotify' || nowPlaying.name.toLowerCase().includes('spotify'));
-    if (!isDup) sources.push(spotify);
-    else if (nowPlaying) {
-      nowPlaying.volume = spotify.volume;
-      if (spotify.position > 0) nowPlaying.position = spotify.position;
+  // If nowPlaying didn't report playing, check if Apple Music, Spotify, or VLC is playing
+  if (appleMusic && appleMusic.state === 'playing') {
+    return appleMusic;
+  }
+  if (spotify && spotify.state === 'playing') {
+    return spotify;
+  }
+  if (vlc && vlc.state === 'playing') {
+    return vlc;
+  }
+
+  // 2. Check if an app was playing and is now paused
+  if (nowPlaying && nowPlaying.state === 'paused' && nowPlaying.title && nowPlaying.title !== 'Media Player' && nowPlaying.title !== 'No Media Playing') {
+    const lowerClient = (nowPlaying.name || '').toLowerCase();
+    const lowerBundle = (nowPlaying.bundle || '').toLowerCase();
+    if (nowPlaying.icon === 'apple' || lowerClient.includes('music') || lowerBundle.includes('music')) {
+      nowPlaying.id = 'apple-music';
+      if (appleMusic) {
+        nowPlaying.volume = appleMusic.volume;
+        if (appleMusic.position > 0) nowPlaying.position = appleMusic.position;
+      }
+    } else if (nowPlaying.icon === 'spotify' || lowerClient.includes('spotify') || lowerBundle.includes('spotify')) {
+      nowPlaying.id = 'spotify';
+      if (spotify) {
+        nowPlaying.volume = spotify.volume;
+        if (spotify.position > 0) nowPlaying.position = spotify.position;
+      }
+    } else if (nowPlaying.icon === 'vlc' || lowerClient.includes('vlc') || lowerBundle.includes('vlc')) {
+      nowPlaying.id = 'vlc';
+      if (vlc && vlc.position > 0) nowPlaying.position = vlc.position;
     }
+    return nowPlaying;
   }
 
-  if (vlc) {
-    const isDup = nowPlaying && (nowPlaying.icon === 'vlc' || nowPlaying.name.toLowerCase().includes('vlc'));
-    if (!isDup) sources.push(vlc);
+  if (spotify && spotify.state === 'paused' && spotify.title && spotify.title !== 'Spotify Player') {
+    return spotify;
   }
 
-  if (youtube) {
-    const isDup = nowPlaying && (nowPlaying.icon === 'youtube' || nowPlaying.title === youtube.title);
-    if (!isDup) sources.push(youtube);
+  if (appleMusic && appleMusic.state === 'paused' && appleMusic.title && appleMusic.title !== 'Music Library') {
+    return appleMusic;
   }
 
-  if (telegram) {
-    const isDup = nowPlaying && (nowPlaying.icon === 'telegram' || nowPlaying.name.toLowerCase().includes('telegram'));
-    if (!isDup) sources.push(telegram);
+  if (vlc && vlc.state === 'paused' && vlc.title && vlc.title !== 'VLC Media Player') {
+    return vlc;
   }
 
-  // 3. Always include Universal System Audio controller
-  sources.push({
-    id: 'system',
-    name: 'Universal Media',
-    icon: 'system',
-    state: nowPlaying && nowPlaying.state === 'playing' ? 'playing' : 'idle',
-    title: nowPlaying ? nowPlaying.title : 'System Audio Controller',
-    artist: nowPlaying ? nowPlaying.artist : 'All Apps / Media Keys',
-    position: nowPlaying ? nowPlaying.position : 0,
-    duration: nowPlaying ? nowPlaying.duration : 300,
-    volume: 75,
-  });
-
-  // 4. Always include Notcha Lo-Fi Radio
-  sources.push({
-    id: 'lofi',
-    name: 'Notcha Lo-Fi',
-    icon: 'lofi',
-    state: 'idle',
-    title: 'Lofi Study Beats',
-    artist: 'Chillhop / Focus Soundscape',
-    position: 0,
-    duration: 300,
-    volume: 70,
-  });
-
-  return sources;
+  // 3. Otherwise, nothing is playing or paused
+  return null;
 }
 
-// Start Media Poller (every 2.5s)
+// Start Media Poller (every 2.0s)
 setInterval(async () => {
   if (win && !win.isDestroyed()) {
-    const sources = await getAllMediaSources();
-    win.webContents.send('media-sources-updated', sources);
+    const active = await getActiveMediaSource();
+    win.webContents.send('media-sources-updated', active ? [active] : []);
   }
-}, 2500);
+}, 2000);
 
 // ---------- IPC Handlers ----------
 ipcMain.on('set-ignore', (_e, ignore) => {
@@ -637,8 +549,10 @@ ipcMain.handle('get-dnd', async () => await getSystemDND());
 ipcMain.on('media-action', (_e, { source, action, value }) => {
   const isMac = process.platform === 'darwin';
 
-  if (source === 'apple-music' && isMac) {
+  if ((source === 'apple-music' || source === 'music') && isMac) {
     if (action === 'playpause') runAppleScript('tell application "Music" to playpause');
+    else if (action === 'play') runAppleScript('tell application "Music" to play');
+    else if (action === 'pause') runAppleScript('tell application "Music" to pause');
     else if (action === 'next') runAppleScript('tell application "Music" to next track');
     else if (action === 'prev') runAppleScript('tell application "Music" to previous track');
     else if (action === 'seek' && typeof value === 'number') runAppleScript(`tell application "Music" to set player position to ${Math.round(value)}`);
@@ -648,6 +562,8 @@ ipcMain.on('media-action', (_e, { source, action, value }) => {
 
   if (source === 'spotify' && isMac) {
     if (action === 'playpause') runAppleScript('tell application "Spotify" to playpause');
+    else if (action === 'play') runAppleScript('tell application "Spotify" to play');
+    else if (action === 'pause') runAppleScript('tell application "Spotify" to pause');
     else if (action === 'next') runAppleScript('tell application "Spotify" to next track');
     else if (action === 'prev') runAppleScript('tell application "Spotify" to previous track');
     else if (action === 'seek' && typeof value === 'number') runAppleScript(`tell application "Spotify" to set player position to ${Math.round(value)}`);
@@ -657,6 +573,8 @@ ipcMain.on('media-action', (_e, { source, action, value }) => {
 
   if (source === 'vlc' && isMac) {
     if (action === 'playpause') runAppleScript('tell application "VLC" to play');
+    else if (action === 'play') runAppleScript('tell application "VLC" to play');
+    else if (action === 'pause') runAppleScript('tell application "VLC" to pause');
     else if (action === 'next') runAppleScript('tell application "VLC" to next');
     else if (action === 'prev') runAppleScript('tell application "VLC" to previous');
     else if (action === 'seek' && typeof value === 'number') runAppleScript(`tell application "VLC" to set current time to ${Math.round(value)}`);
@@ -674,12 +592,18 @@ ipcMain.on('media-action', (_e, { source, action, value }) => {
     }
   } else if (action === 'volume' && typeof value === 'number') {
     const v = Math.max(0, Math.min(100, Math.round(value)));
-    if (isMac) runAppleScript(`set volume output volume ${v}`);
+    cachedSystemVolume = v;
+    if (isMac) {
+      execFile(mediaHelperPath, ['volume', String(v)], (err) => {
+        if (err) runAppleScript(`set volume output volume ${v}`);
+      });
+    }
   }
 });
 
 ipcMain.handle('get-media-sources', async () => {
-  return await getAllMediaSources();
+  const active = await getActiveMediaSource();
+  return active ? [active] : [];
 });
 
 // App launcher
@@ -714,17 +638,29 @@ ipcMain.on('launch-app', (_e, target) => {
 // System volume
 ipcMain.handle('get-system-volume', async () => {
   if (process.platform === 'darwin') {
-    const { err, stdout } = await runAppleScript('output volume of (get volume settings)');
-    if (err) return 50;
-    return parseInt(stdout.trim(), 10) || 50;
+    return new Promise((resolve) => {
+      execFile(mediaHelperPath, ['getvolume'], (err, stdout) => {
+        if (!err && stdout && stdout.trim()) {
+          const v = parseInt(stdout.trim(), 10);
+          if (!isNaN(v)) {
+            cachedSystemVolume = v;
+            return resolve(v);
+          }
+        }
+        resolve(cachedSystemVolume);
+      });
+    });
   }
-  return 50;
+  return cachedSystemVolume;
 });
 
 ipcMain.on('set-system-volume', (_e, vol) => {
   const v = Math.max(0, Math.min(100, Math.round(vol)));
+  cachedSystemVolume = v;
   if (process.platform === 'darwin') {
-    runAppleScript(`set volume output volume ${v}`);
+    execFile(mediaHelperPath, ['volume', String(v)], (err) => {
+      if (err) runAppleScript(`set volume output volume ${v}`);
+    });
   }
 });
 

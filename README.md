@@ -1,21 +1,28 @@
-# Notcha 1.3.2
+# Notcha 2.0.1
 
 > A dynamic-island style desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, and power controls.
 
-![Notcha](logo2.png)
+![Notcha](logo.png)
 
-## What's New in 1.3.2
+## What's New in 2.0.1
 
-- 🛡️ **Power Safety Confirmation Modal**:
-  - **Shut Down**, **Restart**, and **Sleep** now bring up an explicit warning confirmation card with pulsing alert badges and dedicated confirmation buttons (*"Shut Down"*, *"Restart"*, *"Sleep PC"*) alongside *"Cancel"* to prevent accidental clicks.
-  - **Fail-safe dismissals**: Pressing Escape, switching tabs, or unhovering automatically dismisses the warning safely.
-  - **Instant screen lock**: Uses native macOS `SACLockScreenImmediate()` to lock immediately to the password prompt without screensaver delay.
+- 🎨 **New App Logo & Icons**:
+  - Updated the Notcha brand logo and rebuilt macOS (`.icns`), Windows (`.ico`), and Electron window/app icons.
 
-- 🎵 **System Media Sync & Multi-App Carousel**:
-  - Live query via `MediaRemote` reads exact playback status (`playing` vs `paused`) and real elapsed timestamps across apps (Telegram, Spotify, Apple Music, YouTube in Brave/Chrome, VLC, AIMP).
-  - Accurate play/pause state without false active waves while paused.
-  - Interactive seek slider with Command 24 (`SeekToPlaybackPosition`) and in-place DOM updates preventing seek bar snapping or jumping.
-  - Multi-source swipeable / wheel-scrollable carousel.
+## What's New in 1.4.1
+
+- 🔊 **Fixed Volume Slider Persistence & System Audio Sync**:
+  - Fixed volume slider resetting to 80% after adjusting. The volume slider now accurately reflects and stays at the exact level you set.
+  - Native CoreAudio system volume integration: instant query and volume adjustment with zero latency.
+  - Interactive volume dragging and debounce lock prevents periodic background polling from overriding active adjustments.
+
+## What's New in 1.4.0
+
+- 🎵 **Unified Active Media Player (Single-App Smart Detection)**:
+  - Eliminated sub-tab carousel jumping and removed idle/phantom players (no fake background YouTube tabs, idle Telegram processes, or dummy radio players).
+  - Automatically detects and displays whichever application is currently playing audio (Spotify, Apple Music, YouTube in Brave/Chrome/Safari, VLC, Telegram, etc.).
+  - Interactive playback buttons (Play/Pause, Next, Prev, Seek slider, and Volume slider) directly control the active app.
+  - Elegant empty state when no media is playing.
 
 - 🔕 **System Do Not Disturb (DND) Integration**:
   - Toggles macOS Control Center Focus mode directly and syncs state on startup.

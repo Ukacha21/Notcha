@@ -1,5 +1,5 @@
 // ==========================================
-// Notcha 1.3.1 - Enhanced Renderer Process
+// Notcha 2.0.1 - Enhanced Renderer Process
 // ==========================================
 
 const $ = (id) => document.getElementById(id);
@@ -36,9 +36,8 @@ const qtStartBtn = $('qtStartBtn'), qtResetBtn = $('qtResetBtn');
 const alarmLabelInput = $('alarmLabelInput'), alarmTimeInput = $('alarmTimeInput');
 const alarmToggleBtn = $('alarmToggleBtn'), alarmStatusText = $('alarmStatusText');
 
-// Media Carousel
-const carouselPrevBtn = $('carouselPrevBtn'), carouselNextBtn = $('carouselNextBtn');
-const mediaSourcePills = $('mediaSourcePills'), mediaCarouselTrack = $('mediaCarouselTrack');
+// Media Player
+const mediaContainer = $('mediaContainer');
 
 // Power Cards
 const powerCards = document.querySelectorAll('.power-card');
@@ -497,81 +496,28 @@ function checkAlarmTrigger(now) {
 }
 
 // ==========================================
-// 8. MULTI-APP MEDIA CAROUSEL
+// 8. ACTIVE MEDIA PLAYER (SINGLE DYNAMIC ISLAND CONTROLLER)
 // ==========================================
-let detectedSources = [];
-let activeMediaIdx = 0;
-let localLoFiProgress = 0;
-let localLoFiInterval = null;
-let audioEl = new Audio();
-let webAudioCtx = null, noiseNode = null, noiseGain = null;
+let activeMedia = null;
+let isSeeking = false;
+let isVoluming = false;
+let lastUserPlayPauseTime = 0;
+let userToggledState = null;
+let lastUserVolumeTime = 0;
+let userVolumeLevel = null;
 
-audioEl.crossOrigin = 'anonymous';
-
-// Soundscapes list for Notcha Lo-Fi Radio
-const SOUNDSCAPES = [
-  { title: 'Lofi Study Beats', genre: 'Chillhop / Downtempo', url: 'https://ice1.somafm.com/groovesalad-128-mp3', isStream: true, simDuration: 300 },
-  { title: 'Rainy Cafe & Thunder', genre: 'Nature Soundscape', type: 'procedural-rain', simDuration: 600 },
-  { title: 'Pine Forest & Birds', genre: 'Forest Nature', url: 'https://ice6.somafm.com/lush-128-mp3', isStream: true, simDuration: 360 },
-  { title: 'Deep Alpha Waves', genre: 'Binaural Focus', url: 'https://ice2.somafm.com/dronezone-128-mp3', isStream: true, simDuration: 420 },
-  { title: 'Synthwave Chill Drive', genre: 'Retro Synth', url: 'https://ice4.somafm.com/defcon-128-mp3', isStream: true, simDuration: 280 },
-];
-let loFiSoundscapeIdx = 0;
-let isLoFiPlaying = false;
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 function isMediaPlayingOverall() {
-  if (isLoFiPlaying) return true;
-  return detectedSources.some((s) => s.state === 'playing');
-}
-
-// Procedural sound generator
-function startProceduralRain() {
-  stopProceduralNoise();
-  try {
-    webAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const bufferSize = 2 * webAudioCtx.sampleRate;
-    const noiseBuffer = webAudioCtx.createBuffer(1, bufferSize, webAudioCtx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.04;
-      b6 = white * 0.115926;
-    }
-    const whiteNoise = webAudioCtx.createBufferSource();
-    whiteNoise.buffer = noiseBuffer;
-    whiteNoise.loop = true;
-
-    const filter = webAudioCtx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(800, webAudioCtx.currentTime);
-
-    noiseGain = webAudioCtx.createGain();
-    noiseGain.gain.setValueAtTime(0.5, webAudioCtx.currentTime);
-
-    whiteNoise.connect(filter);
-    filter.connect(noiseGain);
-    noiseGain.connect(webAudioCtx.destination);
-    whiteNoise.start();
-    noiseNode = whiteNoise;
-  } catch (_) {}
-}
-
-function stopProceduralNoise() {
-  if (noiseNode) {
-    try { noiseNode.stop(); noiseNode.disconnect(); } catch (_) {}
-    noiseNode = null;
-  }
-  if (webAudioCtx) {
-    try { webAudioCtx.close(); } catch (_) {}
-    webAudioCtx = null;
-  }
+  return !!(activeMedia && activeMedia.state === 'playing');
 }
 
 // Icons mapping for media apps
@@ -594,467 +540,327 @@ function getAppIconSvg(iconType) {
   if (iconType === 'aimp') {
     return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>`;
   }
-  if (iconType === 'lofi') {
-    return `<svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`;
-  }
   return `<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
 }
 
-const isSeekingMap = {};
-const isVolumingMap = {};
-let currentSourceId = 'system';
-let lastUserPlayPauseTime = 0;
-const userToggledState = {};
-
-// Smooth second-by-second playback advancement for playing media
+// Smooth second-by-second playback advancement for active playing track
 setInterval(() => {
-  if (!detectedSources || detectedSources.length === 0) return;
-  detectedSources.forEach((s) => {
-    if (s.state === 'playing') {
-      const dur = s.duration || 300;
-      s.position = Math.min(dur, (s.position || 0) + 1);
+  if (activeMedia && activeMedia.state === 'playing') {
+    const dur = activeMedia.duration || 300;
+    activeMedia.position = Math.min(dur, (activeMedia.position || 0) + 1);
 
-      if (!isSeekingMap[s.id]) {
-        const card = mediaCarouselTrack.querySelector(`.media-card-screen[data-id="${s.id}"]`);
-        if (card) {
-          const pct = dur > 0 ? (s.position / dur) * 100 : 0;
-          const seekEl = card.querySelector('.card-seek');
-          const fillEl = card.querySelector('.seek-row .slider-fill');
-          const timeCur = card.querySelector('.time-cur');
-          if (seekEl) seekEl.value = pct;
-          if (fillEl) fillEl.style.width = `${pct}%`;
-          if (timeCur) timeCur.textContent = formatSecs(s.position);
-        }
-      }
+    if (!isSeeking && mediaContainer) {
+      const pct = dur > 0 ? (activeMedia.position / dur) * 100 : 0;
+      const seekEl = mediaContainer.querySelector('.card-seek');
+      const fillEl = mediaContainer.querySelector('.seek-row .slider-fill');
+      const timeCur = mediaContainer.querySelector('.time-cur');
+      if (seekEl) seekEl.value = pct;
+      if (fillEl) fillEl.style.width = `${pct}%`;
+      if (timeCur) timeCur.textContent = formatSecs(activeMedia.position);
     }
-  });
+  }
 }, 1000);
 
-function renderMediaCarousel() {
-  if (detectedSources.length === 0) return;
+function renderActiveMedia() {
+  if (!mediaContainer) return;
 
-  // Preserve active selection by source ID
-  let targetIdx = detectedSources.findIndex((s) => s.id === currentSourceId);
-  if (targetIdx === -1) {
-    const playIdx = detectedSources.findIndex((s) => s.state === 'playing');
-    targetIdx = playIdx !== -1 ? playIdx : 0;
-    currentSourceId = detectedSources[targetIdx].id;
+  if (!activeMedia) {
+    mediaContainer.innerHTML = `
+      <div class="media-empty-card">
+        <div class="empty-icon-wrapper">
+          <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
+        <div class="empty-title">No Media Playing</div>
+        <div class="empty-subtitle">Play audio in Spotify, Apple Music, YouTube, VLC or your browser to control it here.</div>
+      </div>
+    `;
+    updateCompactCompanion();
+    return;
   }
-  activeMediaIdx = Math.max(0, Math.min(detectedSources.length - 1, targetIdx));
 
-  // 1. Render navigation pills
-  mediaSourcePills.innerHTML = detectedSources
-    .map((s, idx) => {
-      const isPlaying = s.state === 'playing';
-      const isActive = idx === activeMediaIdx;
-      return `
-        <button class="source-pill ${isActive ? 'active' : ''} ${isPlaying ? 'playing' : ''}" data-idx="${idx}" data-id="${s.id}" title="Switch to ${s.name}">
-          ${isPlaying ? '<span class="live-dot"></span>' : ''}
-          <span>${s.name}</span>
-        </button>
-      `;
-    })
-    .join('');
+  const s = activeMedia;
+  const isPlaying = s.state === 'playing';
+  const durationSecs = s.duration || 300;
+  const positionSecs = s.position || 0;
+  const progressPct = durationSecs > 0 ? (positionSecs / durationSecs) * 100 : 0;
+  const isRecentUserVolume = Date.now() - lastUserVolumeTime < 2500;
+  const vol = (isVoluming || isRecentUserVolume) && userVolumeLevel !== null
+    ? userVolumeLevel
+    : (typeof s.volume === 'number' ? s.volume : 50);
 
-  mediaSourcePills.querySelectorAll('.source-pill').forEach((pill) => {
-    pill.addEventListener('click', (e) => {
-      e.stopPropagation();
-      activeMediaIdx = parseInt(pill.dataset.idx, 10);
-      currentSourceId = pill.dataset.id;
-      renderMediaCarousel();
-    });
-  });
+  const existingCard = mediaContainer.querySelector('.active-media-card');
+  if (existingCard && existingCard.dataset.id === s.id) {
+    // In-place DOM update preserves focus and slider drag
+    const titleEl = existingCard.querySelector('.now-playing-title');
+    if (titleEl && titleEl.textContent !== s.title) {
+      titleEl.textContent = s.title;
+      titleEl.title = s.title;
+    }
 
-  // 2. Check if track cards need full rebuild or in-place update
-  const newIds = detectedSources.map((s) => s.id).join('|');
-  const currentCardEls = Array.from(mediaCarouselTrack.querySelectorAll('.media-card-screen'));
-  const oldIds = currentCardEls.map((el) => el.dataset.id).join('|');
+    const artistEl = existingCard.querySelector('.now-playing-artist');
+    if (artistEl && artistEl.textContent !== s.artist) {
+      artistEl.textContent = s.artist;
+      artistEl.title = s.artist;
+    }
 
-  if (newIds !== oldIds || currentCardEls.length === 0) {
-    // Full DOM rebuild
-    mediaCarouselTrack.innerHTML = detectedSources
-      .map((s) => {
-        const isPlaying = s.state === 'playing';
-        const isLoFi = s.id === 'lofi';
-        const durationSecs = s.duration || 300;
-        const positionSecs = s.position || 0;
-        const progressPct = durationSecs > 0 ? (positionSecs / durationSecs) * 100 : 0;
-        const vol = typeof s.volume === 'number' ? s.volume : 75;
+    const nameEl = existingCard.querySelector('.app-name-label');
+    if (nameEl && nameEl.textContent !== s.name) {
+      nameEl.textContent = s.name;
+    }
 
-        return `
-          <div class="media-card-screen" data-id="${s.id}">
-            <div class="media-card-header">
-              <div class="source-badge">
-                <span class="app-icon-circle ${s.icon}">${getAppIconSvg(s.icon)}</span>
-                <span class="app-name-label">${s.name}</span>
-              </div>
-              <div class="status-pill ${isPlaying ? 'playing' : ''}">
-                ${isPlaying ? '▶ Active' : '⏸ Idle'}
-              </div>
-            </div>
+    const iconCircle = existingCard.querySelector('.app-icon-circle');
+    if (iconCircle && !iconCircle.classList.contains(s.icon)) {
+      iconCircle.className = `app-icon-circle ${s.icon}`;
+      iconCircle.innerHTML = getAppIconSvg(s.icon);
+    }
 
-            <div class="media-card-center">
-              <div class="track-details">
-                <div class="now-playing-title" title="${s.title}">${s.title}</div>
-                <div class="now-playing-artist" title="${s.artist}">${s.artist}</div>
-              </div>
-              <div class="sound-wave ${isPlaying ? 'playing' : ''}">
-                <span></span><span></span><span></span><span></span><span></span>
-              </div>
-            </div>
+    const statusPill = existingCard.querySelector('.status-pill');
+    if (statusPill) {
+      statusPill.className = `status-pill ${isPlaying ? 'playing' : ''}`;
+      statusPill.innerHTML = isPlaying ? '<span class="status-pulse-dot"></span> Active' : '⏸ Paused';
+    }
 
-            <!-- Controls: Prev, Play/Pause, Next -->
-            <div class="media-card-controls">
-              <button class="ctrl-btn card-prev" data-id="${s.id}" title="Previous Track">
-                <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
-              </button>
-              <button class="ctrl-btn play-btn card-playpause" data-id="${s.id}" title="${isPlaying ? 'Pause' : 'Play'}">
-                ${isPlaying
-                  ? '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
-                  : '<svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>'
-                }
-              </button>
-              <button class="ctrl-btn card-next" data-id="${s.id}" title="Next Track">
-                <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-              </button>
+    const soundWave = existingCard.querySelector('.sound-wave');
+    if (soundWave) soundWave.className = `sound-wave ${isPlaying ? 'playing' : ''}`;
 
-              ${isLoFi ? `
-                <select class="lofi-select" id="lofiSelect" title="Select Lo-Fi Channel">
-                  ${SOUNDSCAPES.map((sc, i) => `<option value="${i}" ${i === loFiSoundscapeIdx ? 'selected' : ''}>${sc.title}</option>`).join('')}
-                </select>
-              ` : ''}
-            </div>
+    const playBtn = existingCard.querySelector('.card-playpause');
+    if (playBtn) {
+      playBtn.title = isPlaying ? 'Pause' : 'Play';
+      playBtn.innerHTML = isPlaying
+        ? '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
+        : '<svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+    }
 
-            <!-- Seek Slider Row -->
-            <div class="seek-row">
-              <span class="time-stamp time-cur">${formatSecs(positionSecs)}</span>
-              <div class="slider-container">
-                <input type="range" class="custom-slider card-seek" min="0" max="100" value="${progressPct}" step="0.5" data-id="${s.id}" data-dur="${durationSecs}" />
-                <div class="slider-fill" style="width: ${progressPct}%;"></div>
-              </div>
-              <span class="time-stamp time-tot">${formatSecs(durationSecs)}</span>
-            </div>
-
-            <!-- Volume Slider Row -->
-            <div class="volume-row">
-              <button class="vol-icon-btn card-mute" data-id="${s.id}" title="Mute/Unmute">
-                <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-              </button>
-              <div class="slider-container">
-                <input type="range" class="custom-slider card-vol" min="0" max="100" value="${vol}" data-id="${s.id}" />
-                <div class="slider-fill" style="width: ${vol}%;"></div>
-              </div>
-              <span class="vol-num">${vol}%</span>
-            </div>
-          </div>
-        `;
-      })
-      .join('');
-
-    // Attach robust control event listeners
-    mediaCarouselTrack.querySelectorAll('.media-card-screen').forEach((card) => {
-      const id = card.dataset.id;
-
-      card.querySelector('.card-playpause').addEventListener('click', (e) => {
-        e.stopPropagation();
-        handleMediaPlayPause(id);
-      });
-
-      card.querySelector('.card-prev').addEventListener('click', (e) => {
-        e.stopPropagation();
-        handleMediaNav(id, 'prev');
-      });
-
-      card.querySelector('.card-next').addEventListener('click', (e) => {
-        e.stopPropagation();
-        handleMediaNav(id, 'next');
-      });
-
-      const seekSlider = card.querySelector('.card-seek');
-      const startSeek = () => { isSeekingMap[id] = true; };
-      seekSlider.addEventListener('pointerdown', startSeek);
-      seekSlider.addEventListener('mousedown', startSeek);
-      seekSlider.addEventListener('touchstart', startSeek, { passive: true });
-
-      seekSlider.addEventListener('input', (e) => {
-        isSeekingMap[id] = true;
-        const pct = parseFloat(e.target.value);
-        card.querySelector('.seek-row .slider-fill').style.width = `${pct}%`;
-        const dur = parseFloat(e.target.dataset.dur) || 300;
-        const targetSec = (pct / 100) * dur;
-        card.querySelector('.time-cur').textContent = formatSecs(targetSec);
-        const s = detectedSources.find((x) => x.id === id);
-        if (s) s.position = targetSec;
-      });
-
-      seekSlider.addEventListener('change', (e) => {
-        const pct = parseFloat(e.target.value);
-        const dur = parseFloat(e.target.dataset.dur) || 300;
-        const targetSec = (pct / 100) * dur;
-        handleMediaSeek(id, targetSec);
-      });
-
-      const volSlider = card.querySelector('.card-vol');
-      volSlider.addEventListener('pointerdown', () => { isVolumingMap[id] = true; });
-      volSlider.addEventListener('input', (e) => {
-        const v = parseInt(e.target.value, 10);
-        card.querySelector('.volume-row .slider-fill').style.width = `${v}%`;
-        card.querySelector('.vol-num').textContent = `${v}%`;
-        handleMediaVolume(id, v);
-      });
-      volSlider.addEventListener('change', (e) => {
-        const v = parseInt(e.target.value, 10);
-        handleMediaVolume(id, v);
-        setTimeout(() => { isVolumingMap[id] = false; }, 400);
-      });
-
-      const muteBtn = card.querySelector('.card-mute');
-      if (muteBtn) {
-        muteBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const curV = parseInt(volSlider.value, 10);
-          const newV = curV > 0 ? 0 : 75;
-          volSlider.value = newV;
-          card.querySelector('.volume-row .slider-fill').style.width = `${newV}%`;
-          card.querySelector('.vol-num').textContent = `${newV}%`;
-          handleMediaVolume(id, newV);
-        });
+    if (!isSeeking) {
+      const seekEl = existingCard.querySelector('.card-seek');
+      const fillEl = existingCard.querySelector('.seek-row .slider-fill');
+      const timeCur = existingCard.querySelector('.time-cur');
+      const timeTot = existingCard.querySelector('.time-tot');
+      if (seekEl) {
+        seekEl.value = progressPct;
+        seekEl.dataset.dur = durationSecs;
       }
+      if (fillEl) fillEl.style.width = `${progressPct}%`;
+      if (timeCur) timeCur.textContent = formatSecs(positionSecs);
+      if (timeTot) timeTot.textContent = formatSecs(durationSecs);
+    }
 
-      const lofiSelect = card.querySelector('#lofiSelect');
-      if (lofiSelect) {
-        lofiSelect.addEventListener('change', (e) => {
-          loFiSoundscapeIdx = parseInt(e.target.value, 10);
-          changeLoFiTrack(loFiSoundscapeIdx);
-        });
+    if (!isVoluming && !isRecentUserVolume) {
+      const volEl = existingCard.querySelector('.card-vol');
+      const volFill = existingCard.querySelector('.volume-row .slider-fill');
+      const volNum = existingCard.querySelector('.vol-num');
+      if (volEl && document.activeElement !== volEl) {
+        volEl.value = vol;
       }
-    });
+      if (volFill) volFill.style.width = `${vol}%`;
+      if (volNum) volNum.textContent = `${vol}%`;
+    }
   } else {
-    // In-place DOM updates: does not destroy DOM, preserving slider thumb and clicks
-    detectedSources.forEach((s) => {
-      const card = mediaCarouselTrack.querySelector(`.media-card-screen[data-id="${s.id}"]`);
-      if (!card) return;
+    // Rebuild full single active media card DOM
+    mediaContainer.innerHTML = `
+      <div class="active-media-card" data-id="${s.id}">
+        <div class="media-card-header">
+          <div class="source-badge">
+            <span class="app-icon-circle ${s.icon}">${getAppIconSvg(s.icon)}</span>
+            <span class="app-name-label">${escapeHtml(s.name)}</span>
+          </div>
+          <div class="status-pill ${isPlaying ? 'playing' : ''}">
+            ${isPlaying ? '<span class="status-pulse-dot"></span> Active' : '⏸ Paused'}
+          </div>
+        </div>
 
-      const isPlaying = s.state === 'playing';
-      const durationSecs = s.duration || 300;
-      const positionSecs = s.position || 0;
-      const progressPct = durationSecs > 0 ? (positionSecs / durationSecs) * 100 : 0;
-      const vol = typeof s.volume === 'number' ? s.volume : 75;
+        <div class="media-card-center">
+          <div class="track-details">
+            <div class="now-playing-title" title="${escapeHtml(s.title)}">${escapeHtml(s.title)}</div>
+            <div class="now-playing-artist" title="${escapeHtml(s.artist)}">${escapeHtml(s.artist)}</div>
+          </div>
+          <div class="sound-wave ${isPlaying ? 'playing' : ''}">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
 
-      const titleEl = card.querySelector('.now-playing-title');
-      if (titleEl && titleEl.textContent !== s.title) {
-        titleEl.textContent = s.title;
-        titleEl.title = s.title;
-      }
+        <!-- Controls: Prev, Play/Pause, Next -->
+        <div class="media-card-controls">
+          <button class="ctrl-btn card-prev" title="Previous Track">
+            <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+          </button>
+          <button class="ctrl-btn play-btn card-playpause" title="${isPlaying ? 'Pause' : 'Play'}">
+            ${isPlaying
+              ? '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
+              : '<svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>'
+            }
+          </button>
+          <button class="ctrl-btn card-next" title="Next Track">
+            <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+          </button>
+        </div>
 
-      const artistEl = card.querySelector('.now-playing-artist');
-      if (artistEl && artistEl.textContent !== s.artist) {
-        artistEl.textContent = s.artist;
-        artistEl.title = s.artist;
-      }
+        <!-- Seek Slider Row -->
+        <div class="seek-row">
+          <span class="time-stamp time-cur">${formatSecs(positionSecs)}</span>
+          <div class="slider-container">
+            <input type="range" class="custom-slider card-seek" min="0" max="100" value="${progressPct}" step="0.5" data-dur="${durationSecs}" />
+            <div class="slider-fill" style="width: ${progressPct}%;"></div>
+          </div>
+          <span class="time-stamp time-tot">${formatSecs(durationSecs)}</span>
+        </div>
 
-      const statusPill = card.querySelector('.status-pill');
-      if (statusPill) {
-        statusPill.className = `status-pill ${isPlaying ? 'playing' : ''}`;
-        statusPill.textContent = isPlaying ? '▶ Active' : '⏸ Idle';
-      }
+        <!-- Volume Slider Row -->
+        <div class="volume-row">
+          <button class="vol-icon-btn card-mute" title="Mute/Unmute">
+            <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+          </button>
+          <div class="slider-container">
+            <input type="range" class="custom-slider card-vol" min="0" max="100" value="${vol}" />
+            <div class="slider-fill" style="width: ${vol}%;"></div>
+          </div>
+          <span class="vol-num">${vol}%</span>
+        </div>
+      </div>
+    `;
 
-      const soundWave = card.querySelector('.sound-wave');
-      if (soundWave) soundWave.className = `sound-wave ${isPlaying ? 'playing' : ''}`;
-
-      const playBtn = card.querySelector('.card-playpause');
-      if (playBtn) {
-        playBtn.title = isPlaying ? 'Pause' : 'Play';
-        playBtn.innerHTML = isPlaying
-          ? '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
-          : '<svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
-      }
-
-      if (!isSeekingMap[s.id]) {
-        const seekEl = card.querySelector('.card-seek');
-        const fillEl = card.querySelector('.seek-row .slider-fill');
-        const timeCur = card.querySelector('.time-cur');
-        const timeTot = card.querySelector('.time-tot');
-        if (seekEl) {
-          seekEl.value = progressPct;
-          seekEl.dataset.dur = durationSecs;
-        }
-        if (fillEl) fillEl.style.width = `${progressPct}%`;
-        if (timeCur) timeCur.textContent = formatSecs(positionSecs);
-        if (timeTot) timeTot.textContent = formatSecs(durationSecs);
-      }
-
-      if (!isVolumingMap[s.id]) {
-        const volEl = card.querySelector('.card-vol');
-        const volFill = card.querySelector('.volume-row .slider-fill');
-        const volNum = card.querySelector('.vol-num');
-        if (volEl) volEl.value = vol;
-        if (volFill) volFill.style.width = `${vol}%`;
-        if (volNum) volNum.textContent = `${vol}%`;
-      }
+    const card = mediaContainer.querySelector('.active-media-card');
+    card.querySelector('.card-playpause').addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleMediaPlayPause();
     });
-  }
 
-  // Slide track smoothly to the active card
-  mediaCarouselTrack.style.transform = `translateX(-${activeMediaIdx * 100}%)`;
+    card.querySelector('.card-prev').addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleMediaNav('prev');
+    });
+
+    card.querySelector('.card-next').addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleMediaNav('next');
+    });
+
+    const seekSlider = card.querySelector('.card-seek');
+    const startSeek = () => { isSeeking = true; };
+    seekSlider.addEventListener('pointerdown', startSeek);
+    seekSlider.addEventListener('mousedown', startSeek);
+    seekSlider.addEventListener('touchstart', startSeek, { passive: true });
+
+    seekSlider.addEventListener('input', (e) => {
+      isSeeking = true;
+      const pct = parseFloat(e.target.value);
+      card.querySelector('.seek-row .slider-fill').style.width = `${pct}%`;
+      const dur = parseFloat(e.target.dataset.dur) || 300;
+      const targetSec = (pct / 100) * dur;
+      card.querySelector('.time-cur').textContent = formatSecs(targetSec);
+      if (activeMedia) activeMedia.position = targetSec;
+    });
+
+    seekSlider.addEventListener('change', (e) => {
+      const pct = parseFloat(e.target.value);
+      const dur = parseFloat(e.target.dataset.dur) || 300;
+      const targetSec = (pct / 100) * dur;
+      handleMediaSeek(targetSec);
+    });
+
+    const volSlider = card.querySelector('.card-vol');
+    const startVolumeDrag = () => { isVoluming = true; };
+    volSlider.addEventListener('pointerdown', startVolumeDrag);
+    volSlider.addEventListener('mousedown', startVolumeDrag);
+    volSlider.addEventListener('touchstart', startVolumeDrag, { passive: true });
+
+    volSlider.addEventListener('input', (e) => {
+      isVoluming = true;
+      const v = parseInt(e.target.value, 10);
+      card.querySelector('.volume-row .slider-fill').style.width = `${v}%`;
+      card.querySelector('.vol-num').textContent = `${v}%`;
+      handleMediaVolume(v);
+    });
+
+    const endVolumeDrag = (e) => {
+      const v = parseInt(e.target.value, 10);
+      handleMediaVolume(v);
+      setTimeout(() => { isVoluming = false; }, 1000);
+    };
+
+    volSlider.addEventListener('change', endVolumeDrag);
+    volSlider.addEventListener('pointerup', endVolumeDrag);
+    volSlider.addEventListener('mouseup', endVolumeDrag);
+    volSlider.addEventListener('touchend', endVolumeDrag);
+
+    const muteBtn = card.querySelector('.card-mute');
+    if (muteBtn) {
+      muteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const curV = parseInt(volSlider.value, 10);
+        const newV = curV > 0 ? 0 : (userVolumeLevel && userVolumeLevel > 0 ? userVolumeLevel : 50);
+        volSlider.value = newV;
+        card.querySelector('.volume-row .slider-fill').style.width = `${newV}%`;
+        card.querySelector('.vol-num').textContent = `${newV}%`;
+        handleMediaVolume(newV);
+      });
+    }
+  }
 
   updateCompactCompanion();
 }
 
-// Trackpad horizontal swipe / mouse wheel sliding between screens
-const carouselViewport = document.querySelector('.media-carousel-viewport');
-if (carouselViewport) {
-  let wheelTimeout = null;
-  carouselViewport.addEventListener('wheel', (e) => {
-    if (Math.abs(e.deltaX) > 25 && !wheelTimeout) {
-      if (e.deltaX > 0 && activeMediaIdx < detectedSources.length - 1) {
-        activeMediaIdx++;
-        currentSourceId = detectedSources[activeMediaIdx].id;
-        renderMediaCarousel();
-      } else if (e.deltaX < 0 && activeMediaIdx > 0) {
-        activeMediaIdx--;
-        currentSourceId = detectedSources[activeMediaIdx].id;
-        renderMediaCarousel();
-      }
-      wheelTimeout = setTimeout(() => { wheelTimeout = null; }, 400);
-    }
-  }, { passive: true });
+function handleMediaPlayPause() {
+  if (!activeMedia) return;
+  const nextState = activeMedia.state === 'playing' ? 'paused' : 'playing';
+  activeMedia.state = nextState;
+  userToggledState = nextState;
+  lastUserPlayPauseTime = Date.now();
+  renderActiveMedia();
+
+  window.api.sendMediaAction({ source: activeMedia.id, action: 'playpause' });
 }
 
-carouselPrevBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (activeMediaIdx > 0) {
-    activeMediaIdx--;
-    currentSourceId = detectedSources[activeMediaIdx].id;
-    renderMediaCarousel();
-  }
-});
-
-carouselNextBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (activeMediaIdx < detectedSources.length - 1) {
-    activeMediaIdx++;
-    currentSourceId = detectedSources[activeMediaIdx].id;
-    renderMediaCarousel();
-  }
-});
-
-function handleMediaPlayPause(id) {
-  if (id === 'lofi') {
-    isLoFiPlaying = !isLoFiPlaying;
-    const lofiSource = detectedSources.find((s) => s.id === 'lofi');
-    if (lofiSource) lofiSource.state = isLoFiPlaying ? 'playing' : 'paused';
-
-    if (isLoFiPlaying) {
-      const sc = SOUNDSCAPES[loFiSoundscapeIdx];
-      if (sc.type === 'procedural-rain') startProceduralRain();
-      else { stopProceduralNoise(); audioEl.src = sc.url; audioEl.play().catch(() => {}); }
-    } else {
-      audioEl.pause();
-      stopProceduralNoise();
-    }
-    renderMediaCarousel();
-    return;
-  }
-
-  // Instant local UI state update for responsive feedback
-  const s = detectedSources.find((x) => x.id === id);
-  if (s) {
-    const nextState = s.state === 'playing' ? 'paused' : 'playing';
-    s.state = nextState;
-    userToggledState[id] = nextState;
-    lastUserPlayPauseTime = Date.now();
-    renderMediaCarousel();
-  }
-
-  window.api.sendMediaAction({ source: id, action: 'playpause' });
+function handleMediaNav(dir) {
+  if (!activeMedia) return;
+  window.api.sendMediaAction({ source: activeMedia.id, action: dir });
 }
 
-function handleMediaNav(id, dir) {
-  if (id === 'lofi') {
-    loFiSoundscapeIdx = (loFiSoundscapeIdx + (dir === 'next' ? 1 : -1) + SOUNDSCAPES.length) % SOUNDSCAPES.length;
-    changeLoFiTrack(loFiSoundscapeIdx);
-    return;
-  }
-  window.api.sendMediaAction({ source: id, action: dir });
+function handleMediaSeek(sec) {
+  if (!activeMedia) return;
+  isSeeking = true;
+  activeMedia.position = sec;
+  window.api.sendMediaAction({ source: activeMedia.id, action: 'seek', value: sec });
+  setTimeout(() => { isSeeking = false; }, 2000);
 }
 
-function handleMediaSeek(id, sec) {
-  if (id === 'lofi') {
-    if (audioEl.duration && !isNaN(audioEl.duration)) audioEl.currentTime = sec;
-    return;
-  }
-  isSeekingMap[id] = true;
-  const s = detectedSources.find((x) => x.id === id);
-  if (s) s.position = sec;
-  window.api.sendMediaAction({ source: id, action: 'seek', value: sec });
-  setTimeout(() => { isSeekingMap[id] = false; }, 2000);
+function handleMediaVolume(vol) {
+  if (!activeMedia) return;
+  activeMedia.volume = vol;
+  userVolumeLevel = vol;
+  lastUserVolumeTime = Date.now();
+  window.api.sendMediaAction({ source: activeMedia.id, action: 'volume', value: vol });
 }
 
-function handleMediaVolume(id, vol) {
-  if (id === 'lofi') {
-    audioEl.volume = vol / 100;
-    if (noiseGain && webAudioCtx) noiseGain.gain.setValueAtTime((vol / 100) * 0.6, webAudioCtx.currentTime);
-    return;
-  }
-  const s = detectedSources.find((x) => x.id === id);
-  if (s) s.volume = vol;
-  window.api.sendMediaAction({ source: id, action: 'volume', value: vol });
-}
-
-function changeLoFiTrack(idx) {
-  const sc = SOUNDSCAPES[idx];
-  const lofiSource = detectedSources.find((s) => s.id === 'lofi');
-  if (lofiSource) {
-    lofiSource.title = sc.title;
-    lofiSource.artist = sc.genre;
-    lofiSource.duration = sc.simDuration;
-  }
-  if (isLoFiPlaying) {
-    if (sc.type === 'procedural-rain') {
-      audioEl.pause();
-      startProceduralRain();
-    } else {
-      stopProceduralNoise();
-      audioEl.src = sc.url;
-      audioEl.play().catch(() => {});
-    }
-  }
-  renderMediaCarousel();
-}
-
-// Initial fetch of media sources
+// Initial fetch of media source
 window.api.getMediaSources().then((sources) => {
-  detectedSources = sources || [];
-  const playIdx = detectedSources.findIndex((s) => s.state === 'playing');
-  if (playIdx !== -1) {
-    activeMediaIdx = playIdx;
-    currentSourceId = detectedSources[playIdx].id;
-  }
-  renderMediaCarousel();
+  activeMedia = (sources && sources.length > 0) ? sources[0] : null;
+  renderActiveMedia();
 });
 
+// Real-time media source update listener
 window.api.onMediaSourcesUpdated((sources) => {
-  if (!sources || sources.length === 0) return;
   const isRecentUserToggle = Date.now() - lastUserPlayPauseTime < 1800;
+  const isRecentUserVolume = Date.now() - lastUserVolumeTime < 2500;
+  const newActive = (sources && sources.length > 0) ? sources[0] : null;
 
-  detectedSources = sources.map((ns) => {
-    if (ns.id === 'lofi') {
-      const sc = SOUNDSCAPES[loFiSoundscapeIdx];
-      return { ...ns, title: sc.title, artist: sc.genre, duration: sc.simDuration, state: isLoFiPlaying ? 'playing' : 'paused' };
+  if (newActive) {
+    if (isRecentUserToggle && userToggledState !== null && activeMedia && activeMedia.id === newActive.id) {
+      newActive.state = userToggledState;
     }
-    // If user recently clicked play/pause, respect user's immediate state until OS updates
-    if (isRecentUserToggle && userToggledState[ns.id] !== undefined) {
-      ns.state = userToggledState[ns.id];
+    if (isSeeking && activeMedia && activeMedia.id === newActive.id) {
+      newActive.position = activeMedia.position;
     }
-    // If user is actively dragging seek on this card or recently sought, preserve position
-    if (isSeekingMap[ns.id]) {
-      const existing = detectedSources.find((x) => x.id === ns.id);
-      if (existing) ns.position = existing.position;
+    if ((isVoluming || isRecentUserVolume) && userVolumeLevel !== null && activeMedia && activeMedia.id === newActive.id) {
+      newActive.volume = userVolumeLevel;
     }
-    return ns;
-  });
-  renderMediaCarousel();
+    activeMedia = newActive;
+  } else {
+    if (!isRecentUserToggle) {
+      activeMedia = null;
+    }
+  }
+  renderActiveMedia();
 });
 
 // ==========================================
