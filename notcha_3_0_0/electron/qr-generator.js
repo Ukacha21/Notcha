@@ -3,7 +3,7 @@
  * Supports Model 2 Version 4 (EC Level M) for local Wi-Fi URLs
  */
 
-function generateQRCodeSVG(text, size = 180) {
+function generateQRCodeSVG(text, size = 114) {
   const exp = new Uint8Array(512);
   const log = new Uint8Array(256);
   for (let i = 0, x = 1; i < 255; i++) {

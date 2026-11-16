@@ -184,7 +184,7 @@ class TransferServer {
     const url = `http://${ip}:${this.port}`;
     let qrSvg = '';
     try {
-      qrSvg = generateQRCodeSVG(url, 180);
+      qrSvg = generateQRCodeSVG(url, 114);
     } catch (_) {}
 
     return {
