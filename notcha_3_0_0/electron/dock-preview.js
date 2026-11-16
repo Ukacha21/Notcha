@@ -40,6 +40,12 @@
 
       const thumbHtml = win.thumbnail
         ? `<img class="thumb-img" src="${win.thumbnail}" alt="" />`
+        : win.isMinimized
+        ? `<div class="thumb-placeholder minimized">
+            <svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></svg>
+            <span style="font-size: 11px; font-weight: 600; color:#f59e0b;">Minimized in Dock</span>
+            <span style="font-size: 9.5px; color:var(--text-dim);">Click to restore</span>
+           </div>`
         : `<div class="thumb-placeholder">
             <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
             <span style="font-size: 10px; font-weight: 600;">Window Preview</span>

@@ -25,9 +25,9 @@
       overflow: hidden;
       font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       justify-content: center;
-      padding-bottom: 6px;
+      padding: 0;
     }
     .preview-shell {
       display: inline-flex;
@@ -38,7 +38,7 @@
       border: 1px solid var(--border);
       border-radius: 18px;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 20px var(--accent-glow);
-      padding: 10px 12px;
+      padding: 10px 14px;
       gap: 8px;
       animation: popIn 0.2s var(--spring);
     }
@@ -124,6 +124,8 @@
       align-items: center;
       gap: 6px;
       color: var(--text-dim);
+      text-align: center;
+      padding: 0 10px;
     }
     .thumb-placeholder svg {
       width: 32px;
@@ -131,6 +133,9 @@
       stroke: var(--accent);
       fill: none;
       stroke-width: 1.8;
+    }
+    .thumb-placeholder.minimized svg {
+      stroke: #f59e0b;
     }
     .card-footer {
       padding: 6px 8px;

@@ -66,8 +66,8 @@ class DockHelper {
 
     func captureThumbnail(windowId: CGWindowID, maxW: CGFloat = 260) -> String? {
         guard let fn = self.cgCreateImageFn else { return nil }
-        // 1 = .optionIncludingWindow, 1 = .bestResolution
-        guard let img = fn(.null, 1, windowId, 1)?.takeRetainedValue() else {
+        // 8 = .optionIncludingWindow (kCGWindowListOptionIncludingWindow)
+        guard let img = fn(.null, 8, windowId, 1)?.takeRetainedValue() else {
             return nil
         }
         let origW = CGFloat(img.width)
@@ -170,7 +170,7 @@ class DockHelper {
 
         // Query open windows via CGWindowListCopyWindowInfo
         var windowData: [[String: Any]] = []
-        if let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
+        if let windowList = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
             let appWindows = windowList.filter {
                 ($0[kCGWindowOwnerPID as String] as? pid_t) == pid &&
                 ($0[kCGWindowLayer as String] as? Int) == 0 &&
@@ -186,9 +186,10 @@ class DockHelper {
 
             for (idx, w) in appWindows.enumerated() {
                 let winId = w[kCGWindowNumber as String] as? CGWindowID ?? 0
-                var title = w[kCGWindowName as String] as? String ?? ""
+                var title = (w[kCGWindowName as String] as? String) ?? ""
+                let isOnscreen = (w[kCGWindowIsOnscreen as String] as? Bool) ?? true
 
-                var isMin = false
+                var isMin = !isOnscreen
                 if idx < axWindows.count {
                     let axW = axWindows[idx]
                     if title.isEmpty {
@@ -198,14 +199,16 @@ class DockHelper {
                     }
                     var minRef: CFTypeRef?
                     AXUIElementCopyAttributeValue(axW, kAXMinimizedAttribute as CFString, &minRef)
-                    isMin = (minRef as? Bool) ?? false
+                    if let m = minRef as? Bool, m {
+                        isMin = true
+                    }
                 }
 
                 if title.isEmpty {
-                    title = "\(appName) Window"
+                    continue
                 }
 
-                let thumbB64 = captureThumbnail(windowId: winId) ?? ""
+                let thumbB64 = isMin ? "" : (captureThumbnail(windowId: winId) ?? "")
 
                 windowData.append([
                     "id": Int(winId),
