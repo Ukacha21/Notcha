@@ -59,22 +59,28 @@
 ---
 
 ## 4. Hover on Dock Icons for Window Previews
-- [ ] **Native Swift Dock Tracker** (`dock-tracker.swift`):
-  - Request & verify macOS **Accessibility** (`AXUIElement`) and **Screen Recording** permissions
-  - Track global mouse coordinates when entering the macOS Dock bounds (`com.apple.dock`)
-  - Identify hovered Dock icon and resolve target app's PID / bundle identifier
-- [ ] **Window Snapshot Capture**:
-  - Query window IDs for target PID via `CGWindowListCopyWindowInfo`
-  - Capture window thumbnail preview bitmaps (`CGWindowListCreateImage` / `ScreenCaptureKit`)
-- [ ] **Floating Preview Window**:
-  - Non-activating, transparent preview popup anchored directly above the hovered Dock icon
-  - Smooth hover fade-in/fade-out animations
-  - Click thumbnail to activate / raise target window
+- [x] **Native Swift Dock Tracker** (`dock-helper.swift` -> `dock-helper`):
+  - Track global mouse coordinates via `NSEvent.mouseLocation` every 80ms
+  - Real-time hit-testing on the macOS Dock process (`com.apple.dock`) via `AXUIElementCopyElementAtPosition`
+  - Identify hovered `AXDockItem`, extract application name, and resolve exact screen bounding box `(x, y, w, h)`
+  - Match running `NSRunningApplication` and extract high-resolution app icon (base64 PNG)
+- [x] **Window Snapshot Capture & Window Management**:
+  - Query window IDs, titles, positions, and bounds for the target PID via `CGWindowListCopyWindowInfo` and `kAXWindowsAttribute`
+  - High-performance JPEG window snapshot capture downscaled to ~260px wide
+  - Window activation / raise handler (`AXUIElementPerformAction` `kAXRaiseAction` + `app.activate()`)
+  - Window close handler (`kAXCloseButtonAttribute` + `kAXPressAction`)
+- [x] **Floating Preview Window** (`dock-preview.html` & `dock-preview.js`):
+  - Non-activating, transparent floating popup anchored directly above the hovered Dock icon
+  - Smooth pop-in animation, frosted-glass background (`backdrop-filter: blur(36px)`)
+  - Header with app icon, app name, and window count pill badge
+  - Side-by-side cards with live window thumbnails, titles, minimized badge, and hover close button
+  - Click any card to instantly bring that window to the front
+  - Mouse-enter / mouse-leave debounce logic so user can comfortably move mouse into the preview card
 
 ---
 
 ## Implementation Sequence
 1. **Milestone 1:** System Audio Routing (Output Device Selector in Media Panel) ✅ *Completed*
 2. **Milestone 2:** Cross-Platform File Transfer Hub & QR Mobile Web Portal + Gallery + Floating Mini App ✅ *Completed*
-3. **Milestone 3:** Dock Icon Hover Window Previews (Swift Accessibility + ScreenCapture) ⬅ *Next*
-4. **Milestone 4:** Multi-App Volume Mixer (Media apps first, HAL driver evaluation)
+3. **Milestone 3:** Dock Icon Hover Window Previews (Swift Accessibility + Window Snapshots) ✅ *Completed*
+4. **Milestone 4:** Multi-App Volume Mixer (Media apps first, HAL driver evaluation) ⬅ *Next*

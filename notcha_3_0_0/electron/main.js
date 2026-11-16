@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, clipboard, dialog } = require('electron');
 const path = require('path');
-const { exec, execFile } = require('child_process');
+const { exec, execFile, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const TransferServer = require('./transfer-server');
@@ -123,6 +123,126 @@ function createMiniTransferWindow() {
   miniWin.on('closed', () => {
     miniWin = null;
   });
+}
+
+// ---------- Dock Icon Hover Window Previews ----------
+let dockHelperProcess = null;
+let dockPreviewWin = null;
+let isMouseOverDockPreview = false;
+let dockPreviewHideTimer = null;
+
+function createDockPreviewWindow() {
+  if (dockPreviewWin && !dockPreviewWin.isDestroyed()) return;
+
+  dockPreviewWin = new BrowserWindow({
+    width: 260,
+    height: 220,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  if (process.platform === 'darwin') {
+    dockPreviewWin.setAlwaysOnTop(true, 'screen-saver');
+    dockPreviewWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
+
+  dockPreviewWin.loadFile(path.join(__dirname, 'dock-preview.html'));
+
+  dockPreviewWin.on('closed', () => {
+    dockPreviewWin = null;
+  });
+}
+
+function showDockPreview(data) {
+  if (!dockPreviewWin || dockPreviewWin.isDestroyed()) {
+    createDockPreviewWindow();
+  }
+  clearTimeout(dockPreviewHideTimer);
+
+  const iconFrame = data.iconFrame || { x: 0, y: 0, width: 44, height: 44 };
+  const windows = data.windows || [];
+  if (windows.length === 0) return;
+
+  const cardWidth = 230;
+  const count = Math.min(3, windows.length);
+  const previewW = count * cardWidth + 24;
+  const previewH = 210;
+
+  const display = screen.getDisplayNearestPoint({ x: Math.round(iconFrame.x), y: Math.round(iconFrame.y) }) || screen.getPrimaryDisplay();
+  const { x: dispX, y: dispY, width: dispW, height: dispH } = display.bounds;
+
+  let posX = Math.round(iconFrame.x + (iconFrame.width - previewW) / 2);
+  posX = Math.max(dispX + 12, Math.min(dispX + dispW - previewW - 12, posX));
+
+  let posY = Math.round(iconFrame.y - previewH - 8);
+  if (posY < dispY + 30) {
+    posY = Math.round(iconFrame.y + iconFrame.height + 8);
+  }
+
+  dockPreviewWin.setBounds({ x: posX, y: posY, width: previewW, height: previewH });
+  dockPreviewWin.webContents.send('dock-preview-data', data);
+  dockPreviewWin.showInactive();
+}
+
+function hideDockPreview() {
+  clearTimeout(dockPreviewHideTimer);
+  dockPreviewHideTimer = setTimeout(() => {
+    if (!isMouseOverDockPreview && dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+      dockPreviewWin.hide();
+    }
+  }, 260);
+}
+
+function startDockHelper() {
+  if (process.platform !== 'darwin') return;
+  const dockHelperPath = getAssetPath('dock-helper');
+  if (!fs.existsSync(dockHelperPath)) return;
+
+  createDockPreviewWindow();
+
+  try {
+    dockHelperProcess = spawn(dockHelperPath, [], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let buffer = '';
+    dockHelperProcess.stdout.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const msg = JSON.parse(trimmed);
+          if (msg.type === 'hover') {
+            showDockPreview(msg);
+          } else if (msg.type === 'leave') {
+            hideDockPreview();
+          }
+        } catch (_) {}
+      }
+    });
+
+    dockHelperProcess.on('exit', () => {
+      dockHelperProcess = null;
+    });
+  } catch (err) {
+    console.error('Failed to spawn dock-helper:', err);
+  }
 }
 
 // ---------- Clipboard Watcher ----------
@@ -870,12 +990,40 @@ ipcMain.on('show-item-in-folder', (_e, filePath) => {
   }
 });
 
+// ---------- Dock Preview IPC ----------
+ipcMain.on('dock-preview-mouse-enter', () => {
+  isMouseOverDockPreview = true;
+  clearTimeout(dockPreviewHideTimer);
+});
+
+ipcMain.on('dock-preview-mouse-leave', () => {
+  isMouseOverDockPreview = false;
+  hideDockPreview();
+});
+
+ipcMain.on('activate-dock-window', (_e, payload) => {
+  if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+    dockPreviewWin.hide();
+  }
+  isMouseOverDockPreview = false;
+  if (dockHelperProcess && dockHelperProcess.stdin && payload) {
+    dockHelperProcess.stdin.write(JSON.stringify({ action: 'raise', pid: payload.pid, index: payload.index }) + '\n');
+  }
+});
+
+ipcMain.on('close-dock-window', (_e, payload) => {
+  if (dockHelperProcess && dockHelperProcess.stdin && payload) {
+    dockHelperProcess.stdin.write(JSON.stringify({ action: 'close', pid: payload.pid, index: payload.index }) + '\n');
+  }
+});
+
 // ---------- Lifecycle ----------
 app.whenReady().then(() => {
   if (process.platform === 'darwin') app.dock.hide();
   createWindow();
   startClipboardWatcher();
   initTransferServer();
+  startDockHelper();
 
   globalShortcut.register('CommandOrControl+Alt+N', () => {
     if (win && !win.isDestroyed()) win.webContents.send('toggle-hide');
@@ -888,6 +1036,12 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   if (transferServer) transferServer.stop();
+  if (dockHelperProcess) {
+    try {
+      dockHelperProcess.stdin.write(JSON.stringify({ action: 'quit' }) + '\n');
+      dockHelperProcess.kill();
+    } catch (_) {}
+  }
   globalShortcut.unregisterAll();
 });
 app.on('window-all-closed', () => app.quit());

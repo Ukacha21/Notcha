@@ -52,4 +52,11 @@ contextBridge.exposeInMainWorld('api', {
   onTransferReceived: (cb) => ipcRenderer.on('transfer-received', (_e, item) => cb(item)),
   onSharedFilesUpdated: (cb) => ipcRenderer.on('shared-files-updated', (_e, files) => cb(files)),
   onTransfersHistoryUpdated: (cb) => ipcRenderer.on('transfers-history-updated', (_e, history) => cb(history)),
+
+  // Dock Previews
+  onDockPreviewData: (cb) => ipcRenderer.on('dock-preview-data', (_e, data) => cb(data)),
+  activateDockWindow: (payload) => ipcRenderer.send('activate-dock-window', payload),
+  closeDockWindow: (payload) => ipcRenderer.send('close-dock-window', payload),
+  dockPreviewMouseEnter: () => ipcRenderer.send('dock-preview-mouse-enter'),
+  dockPreviewMouseLeave: () => ipcRenderer.send('dock-preview-mouse-leave'),
 });

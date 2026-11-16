@@ -32,6 +32,10 @@
       "logo.png",
       "media-helper",
       "nowplaying-query.swift",
+      "dock-helper",
+      "dock-helper.swift",
+      "dock-preview.html",
+      "dock-preview.js",
       "qr-generator.js",
       "transfer-server.js",
       "mini-transfer.html",
@@ -39,6 +43,7 @@
     ],
     "asarUnpack": [
       "media-helper",
+      "dock-helper",
       "nowplaying-query.swift"
     ],
     "mac": {
