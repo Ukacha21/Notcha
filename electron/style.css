@@ -2151,14 +2151,27 @@ html, body {
   align-items: center;
   gap: 14px;
   flex: 1;
+  min-height: 0;
 }
 .qr-sheet-code {
   background: #fff;
-  border-radius: 10px;
-  padding: 5px;
-  display: grid;
-  place-items: center;
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  width: 122px;
+  height: 122px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.qr-sheet-code svg {
+  width: 114px;
+  height: 114px;
+  max-width: 114px;
+  max-height: 114px;
+  display: block;
 }
 .qr-sheet-info {
   display: flex;

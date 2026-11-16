@@ -155,8 +155,8 @@ function createDockPreviewWindow() {
   if (dockPreviewWin && !dockPreviewWin.isDestroyed()) return;
 
   dockPreviewWin = new BrowserWindow({
-    width: 260,
-    height: 220,
+    width: 280,
+    height: 260,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -211,10 +211,12 @@ function showDockPreview(data) {
     const fw = Number.isFinite(iconFrame.width) ? iconFrame.width : 44;
     const fh = Number.isFinite(iconFrame.height) ? iconFrame.height : 44;
 
-    const cardWidth = 230;
-    const count = Math.min(3, data.windows.length);
-    const previewW = Math.round(count * cardWidth + 24);
-    const previewH = 210;
+    const cardWidth = 220;
+    const cardGap = 10;
+    const shellPadding = 28;
+    const count = Math.min(4, data.windows.length);
+    const previewW = Math.round(count * cardWidth + (count - 1) * cardGap + shellPadding + 16);
+    const previewH = 252;
 
     const display = screen.getDisplayNearestPoint({ x: Math.round(fx), y: Math.round(fy) }) || screen.getPrimaryDisplay();
     const { x: dispX, y: dispY, width: dispW, height: dispH } = display.bounds;
@@ -222,9 +224,9 @@ function showDockPreview(data) {
     let posX = Math.round(fx + (fw - previewW) / 2);
     posX = Math.max(dispX + 12, Math.min(dispX + dispW - previewW - 12, posX));
 
-    let posY = Math.round(fy - previewH - 8);
+    let posY = Math.round(fy - previewH - 12);
     if (posY < dispY + 30) {
-      posY = Math.round(fy + fh + 8);
+      posY = Math.round(fy + fh + 12);
     }
 
     if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {

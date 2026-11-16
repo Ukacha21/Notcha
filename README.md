@@ -1,8 +1,23 @@
-# Notcha 3.0.0
+# Notcha 3.0.1
 
 > A dynamic-island style desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, and power controls.
 
 ![Notcha](logo.png)
+
+## What's New in 3.0.1
+
+- 📱 **QR Code Mobile Pairing Sheet Fix**:
+  - Resized and padded the QR code display inside the Transfer tab's "Connect Mobile Device" sheet so it is 100% visible with comfortable breathing room, preventing the bottom modules from clipping past the rounded notch boundary.
+  - Added responsive SVG scaling constraints for both notch overlay and standalone floating Mini App.
+
+- 🖼️ **Dock Icon Window Previews Bounds & CoreGraphics Capture**:
+  - Expanded dock preview window height to 252px, perfectly accommodating the frosted title bar, app icon, window count badge, and window cards without top/bottom clipping.
+  - Resolved live window screenshot capture using CoreGraphics window inclusion options.
+  - Added dedicated amber "Minimized in Dock" status badges with restore hints for minimized application windows.
+
+- ⚡ **Startup Reliability & Non-Intrusive Permissions**:
+  - Hoisted all renderer DOM element bindings and error handlers, preventing startup freeze (`--:--` on notch pill).
+  - Silenced intrusive startup accessibility dialogs; dock helper now performs passive permission checks with graceful idle fallbacks.
 
 ## What's New in 3.0.0
 
