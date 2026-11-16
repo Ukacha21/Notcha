@@ -5,4 +5,5 @@ dist/
 .DS_Store
 *.log
 .tmp-gh-release/
+upload_assets.py
 
