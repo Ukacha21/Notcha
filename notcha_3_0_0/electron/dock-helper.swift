@@ -16,7 +16,21 @@ class DockHelper {
     var cgCreateImageFn: CGWindowListCreateImageFunc?
     var isRunning = true
 
+    static func requestPermissionsOnLaunch() {
+        // 1. Accessibility: prompt user if not already granted
+        let axOptions = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let _ = AXIsProcessTrustedWithOptions(axOptions)
+
+        // 2. Screen Capture: prompt user if not already granted
+        if #available(macOS 10.15, *) {
+            if !CGPreflightScreenCaptureAccess() {
+                CGRequestScreenCaptureAccess()
+            }
+        }
+    }
+
     init() {
+        DockHelper.requestPermissionsOnLaunch()
         setupDynamicCG()
         setupDock()
     }
@@ -326,6 +340,11 @@ class DockHelper {
         RunLoop.main.add(timer, forMode: .common)
         RunLoop.main.run()
     }
+}
+
+if CommandLine.arguments.contains("--prompt-permissions") || CommandLine.arguments.contains("--check-permissions") {
+    DockHelper.requestPermissionsOnLaunch()
+    exit(0)
 }
 
 let helper = DockHelper()

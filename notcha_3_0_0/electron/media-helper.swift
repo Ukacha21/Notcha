@@ -446,6 +446,18 @@ if args.count > 1 {
     let cmd = args[1]
     if cmd == "lock" {
         lockScreen()
+    } else if cmd == "checkpermissions" || cmd == "permissions" {
+        let axOptions = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let ax = AXIsProcessTrustedWithOptions(axOptions)
+        var screen = true
+        if #available(macOS 10.15, *) {
+            screen = CGPreflightScreenCaptureAccess()
+            if !screen {
+                CGRequestScreenCaptureAccess()
+            }
+        }
+        print("{\"accessibility\":\(ax),\"screen\":\(screen)}")
+        fflush(stdout)
     } else if cmd == "getvolume" {
         print(getSystemOutputVolume())
         fflush(stdout)

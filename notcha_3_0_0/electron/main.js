@@ -1,9 +1,17 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, clipboard, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, clipboard, dialog, systemPreferences } = require('electron');
 const path = require('path');
 const { exec, execFile, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const TransferServer = require('./transfer-server');
+
+// Prevent transient errors from displaying modal crash dialogs
+process.on('uncaughtException', (err) => {
+  console.error('[Notcha] Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Notcha] Unhandled Rejection:', reason);
+});
 
 // Canvas dimensions: large enough to fit expanded island tabs without clipping.
 const W = 640;
@@ -130,6 +138,28 @@ let dockHelperProcess = null;
 let dockPreviewWin = null;
 let isMouseOverDockPreview = false;
 let dockPreviewHideTimer = null;
+let isDockPreviewReady = false;
+let pendingDockPreviewData = null;
+
+function requestMacPermissionsOnLaunch() {
+  if (process.platform !== 'darwin') return;
+  try {
+    // 1. Prompt Accessibility permission if not granted
+    if (systemPreferences && systemPreferences.isTrustedAccessibilityClient) {
+      systemPreferences.isTrustedAccessibilityClient(true);
+    }
+  } catch (err) {
+    console.warn('Accessibility permission check warning:', err);
+  }
+
+  // 2. Trigger native Screen Recording and Accessibility prompts via dock-helper / media-helper
+  try {
+    const dockHelperPath = getAssetPath('dock-helper');
+    if (fs.existsSync(dockHelperPath)) {
+      execFile(dockHelperPath, ['--prompt-permissions'], () => {});
+    }
+  } catch (_) {}
+}
 
 function createDockPreviewWindow() {
   if (dockPreviewWin && !dockPreviewWin.isDestroyed()) return;
@@ -158,50 +188,77 @@ function createDockPreviewWindow() {
     dockPreviewWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   }
 
+  isDockPreviewReady = false;
+  dockPreviewWin.webContents.once('did-finish-load', () => {
+    isDockPreviewReady = true;
+    if (pendingDockPreviewData && dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+      dockPreviewWin.webContents.send('dock-preview-data', pendingDockPreviewData);
+      pendingDockPreviewData = null;
+    }
+  });
+
   dockPreviewWin.loadFile(path.join(__dirname, 'dock-preview.html'));
 
   dockPreviewWin.on('closed', () => {
     dockPreviewWin = null;
+    isDockPreviewReady = false;
+    pendingDockPreviewData = null;
   });
 }
 
 function showDockPreview(data) {
-  if (!dockPreviewWin || dockPreviewWin.isDestroyed()) {
-    createDockPreviewWindow();
+  try {
+    if (!data || !Array.isArray(data.windows) || data.windows.length === 0) return;
+
+    if (!dockPreviewWin || dockPreviewWin.isDestroyed()) {
+      createDockPreviewWindow();
+    }
+    clearTimeout(dockPreviewHideTimer);
+
+    const iconFrame = data.iconFrame || {};
+    const fx = Number.isFinite(iconFrame.x) ? iconFrame.x : 0;
+    const fy = Number.isFinite(iconFrame.y) ? iconFrame.y : 1000;
+    const fw = Number.isFinite(iconFrame.width) ? iconFrame.width : 44;
+    const fh = Number.isFinite(iconFrame.height) ? iconFrame.height : 44;
+
+    const cardWidth = 230;
+    const count = Math.min(3, data.windows.length);
+    const previewW = Math.round(count * cardWidth + 24);
+    const previewH = 210;
+
+    const display = screen.getDisplayNearestPoint({ x: Math.round(fx), y: Math.round(fy) }) || screen.getPrimaryDisplay();
+    const { x: dispX, y: dispY, width: dispW, height: dispH } = display.bounds;
+
+    let posX = Math.round(fx + (fw - previewW) / 2);
+    posX = Math.max(dispX + 12, Math.min(dispX + dispW - previewW - 12, posX));
+
+    let posY = Math.round(fy - previewH - 8);
+    if (posY < dispY + 30) {
+      posY = Math.round(fy + fh + 8);
+    }
+
+    if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+      dockPreviewWin.setBounds({ x: posX, y: posY, width: previewW, height: previewH });
+      if (isDockPreviewReady) {
+        dockPreviewWin.webContents.send('dock-preview-data', data);
+      } else {
+        pendingDockPreviewData = data;
+      }
+      dockPreviewWin.showInactive();
+    }
+  } catch (err) {
+    console.warn('showDockPreview error:', err);
   }
-  clearTimeout(dockPreviewHideTimer);
-
-  const iconFrame = data.iconFrame || { x: 0, y: 0, width: 44, height: 44 };
-  const windows = data.windows || [];
-  if (windows.length === 0) return;
-
-  const cardWidth = 230;
-  const count = Math.min(3, windows.length);
-  const previewW = count * cardWidth + 24;
-  const previewH = 210;
-
-  const display = screen.getDisplayNearestPoint({ x: Math.round(iconFrame.x), y: Math.round(iconFrame.y) }) || screen.getPrimaryDisplay();
-  const { x: dispX, y: dispY, width: dispW, height: dispH } = display.bounds;
-
-  let posX = Math.round(iconFrame.x + (iconFrame.width - previewW) / 2);
-  posX = Math.max(dispX + 12, Math.min(dispX + dispW - previewW - 12, posX));
-
-  let posY = Math.round(iconFrame.y - previewH - 8);
-  if (posY < dispY + 30) {
-    posY = Math.round(iconFrame.y + iconFrame.height + 8);
-  }
-
-  dockPreviewWin.setBounds({ x: posX, y: posY, width: previewW, height: previewH });
-  dockPreviewWin.webContents.send('dock-preview-data', data);
-  dockPreviewWin.showInactive();
 }
 
 function hideDockPreview() {
   clearTimeout(dockPreviewHideTimer);
   dockPreviewHideTimer = setTimeout(() => {
-    if (!isMouseOverDockPreview && dockPreviewWin && !dockPreviewWin.isDestroyed()) {
-      dockPreviewWin.hide();
-    }
+    try {
+      if (!isMouseOverDockPreview && dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+        dockPreviewWin.hide();
+      }
+    } catch (_) {}
   }, 260);
 }
 
@@ -216,6 +273,17 @@ function startDockHelper() {
     dockHelperProcess = spawn(dockHelperPath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+
+    dockHelperProcess.on('error', (err) => {
+      console.warn('dockHelperProcess error:', err.message);
+      dockHelperProcess = null;
+    });
+
+    if (dockHelperProcess.stdin) {
+      dockHelperProcess.stdin.on('error', (err) => {
+        console.warn('dockHelperProcess.stdin error:', err.message);
+      });
+    }
 
     let buffer = '';
     dockHelperProcess.stdout.on('data', (chunk) => {
@@ -1002,24 +1070,35 @@ ipcMain.on('dock-preview-mouse-leave', () => {
 });
 
 ipcMain.on('activate-dock-window', (_e, payload) => {
-  if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {
-    dockPreviewWin.hide();
-  }
-  isMouseOverDockPreview = false;
-  if (dockHelperProcess && dockHelperProcess.stdin && payload) {
-    dockHelperProcess.stdin.write(JSON.stringify({ action: 'raise', pid: payload.pid, index: payload.index }) + '\n');
+  try {
+    if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+      dockPreviewWin.hide();
+    }
+    isMouseOverDockPreview = false;
+    if (dockHelperProcess && dockHelperProcess.stdin && dockHelperProcess.stdin.writable && payload) {
+      dockHelperProcess.stdin.write(JSON.stringify({ action: 'raise', pid: payload.pid, index: payload.index }) + '\n');
+    }
+  } catch (err) {
+    console.warn('activate-dock-window error:', err);
   }
 });
 
 ipcMain.on('close-dock-window', (_e, payload) => {
-  if (dockHelperProcess && dockHelperProcess.stdin && payload) {
-    dockHelperProcess.stdin.write(JSON.stringify({ action: 'close', pid: payload.pid, index: payload.index }) + '\n');
+  try {
+    if (dockHelperProcess && dockHelperProcess.stdin && dockHelperProcess.stdin.writable && payload) {
+      dockHelperProcess.stdin.write(JSON.stringify({ action: 'close', pid: payload.pid, index: payload.index }) + '\n');
+    }
+  } catch (err) {
+    console.warn('close-dock-window error:', err);
   }
 });
 
 // ---------- Lifecycle ----------
 app.whenReady().then(() => {
-  if (process.platform === 'darwin') app.dock.hide();
+  if (process.platform === 'darwin') {
+    app.dock.hide();
+    requestMacPermissionsOnLaunch();
+  }
   createWindow();
   startClipboardWatcher();
   initTransferServer();
