@@ -49,6 +49,40 @@ const customAppInput = $('customAppInput'), customAppLaunchBtn = $('customAppLau
 // Clipboard
 const clipSearchInput = $('clipSearchInput'), clearClipsBtn = $('clearClipsBtn'), clipsList = $('clipsList');
 
+// Audio Output Routing & Volume Mixer Elements
+const audioRouteSheet = $('audioRouteSheet');
+const routeSheetCloseBtn = $('routeSheetCloseBtn');
+const routeDeviceList = $('routeDeviceList');
+const volumeMixerSheet = $('volumeMixerSheet');
+const mixerAppList = $('mixerAppList');
+const mixerCloseBtn = $('mixerCloseBtn');
+
+// Transfer Tab Elements
+const transferServerUrl = $('transferServerUrl');
+const transferQrBtn = $('transferQrBtn');
+const transferPopoutBtn = $('transferPopoutBtn');
+const transferFolderBtn = $('transferFolderBtn');
+const filePickerNotch = $('filePickerNotch');
+const notchDropzone = $('notchDropzone');
+const notchSharedBanner = $('notchSharedBanner');
+const notchSharedText = $('notchSharedText');
+const notchClearSharedBtn = $('notchClearSharedBtn');
+const albumBtns = document.querySelectorAll('.album-btn');
+const notchClearHistoryBtn = $('notchClearHistoryBtn');
+const notchGalleryList = $('notchGalleryList');
+const notchQrSheet = $('notchQrSheet');
+const notchQrBox = $('notchQrBox');
+const notchQrUrl = $('notchQrUrl');
+const closeNotchQrBtn = $('closeNotchQrBtn');
+
+// Global Error Handlers
+window.addEventListener('error', (e) => {
+  console.error('Renderer Error:', e.error || e.message);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Renderer Unhandled Rejection:', e.reason);
+});
+
 // Constants
 const RING_C = 2 * Math.PI * 6;
 ringBar.style.strokeDasharray = RING_C;
@@ -118,15 +152,15 @@ function switchTab(tabName) {
   panels.forEach((p) => p.classList.toggle('active', p.id === `panel${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`));
   hidePowerConfirmation();
   if (tabName === 'music') {
-    refreshAudioDevices();
+    if (typeof refreshAudioDevices === 'function') refreshAudioDevices();
   } else {
-    closeAudioRouteSheet();
-    closeVolumeMixerSheet();
+    if (typeof closeAudioRouteSheet === 'function') closeAudioRouteSheet();
+    if (typeof closeVolumeMixerSheet === 'function') closeVolumeMixerSheet();
   }
   if (tabName === 'transfer') {
-    refreshTransferInfo();
+    if (typeof refreshTransferInfo === 'function') refreshTransferInfo();
   } else {
-    closeTransferQrSheet();
+    if (typeof closeTransferQrSheet === 'function') closeTransferQrSheet();
   }
 }
 
@@ -136,7 +170,6 @@ tabBtns.forEach((btn) => {
     switchTab(btn.dataset.tab);
   });
 });
-switchTab(activeTab);
 
 function switchFocusSub(subName) {
   activeFocusSub = subName;
@@ -575,9 +608,6 @@ setInterval(() => {
 // ==========================================
 // AUDIO OUTPUT ROUTING
 // ==========================================
-const audioRouteSheet = $('audioRouteSheet');
-const routeSheetCloseBtn = $('routeSheetCloseBtn');
-const routeDeviceList = $('routeDeviceList');
 let audioDevices = [];
 let currentOutputDevice = null;
 
@@ -698,9 +728,6 @@ function closeAudioRouteSheet() {
 }
 
 // ---------- Multi-App Volume Mixer Controller ----------
-const volumeMixerSheet = $('volumeMixerSheet');
-const mixerAppList = $('mixerAppList');
-const mixerCloseBtn = $('mixerCloseBtn');
 
 function openVolumeMixerSheet() {
   if (!volumeMixerSheet) return;
@@ -1346,8 +1373,12 @@ function formatClipAge(timestamp) {
 clipSearchInput.addEventListener('input', (e) => renderClips(e.target.value));
 clearClipsBtn.addEventListener('click', (e) => { e.stopPropagation(); window.api.clearClipboard(); });
 
-window.api.getClipboardHistory().then((list) => { clipboardData = list || []; renderClips(); });
-window.api.onClipboardUpdated((list) => { clipboardData = list || []; renderClips(clipSearchInput.value); });
+if (window.api && window.api.getClipboardHistory) {
+  window.api.getClipboardHistory().then((list) => { clipboardData = Array.isArray(list) ? list : []; renderClips(); });
+}
+if (window.api && window.api.onClipboardUpdated) {
+  window.api.onClipboardUpdated((list) => { clipboardData = Array.isArray(list) ? list : []; renderClips(clipSearchInput.value); });
+}
 
 // ==========================================
 // 12. MASTER TICK LOOP (CLOCK, TIMERS, ALARM)
@@ -1432,23 +1463,6 @@ setInterval(() => {
 // ==========================================
 // 12. TRANSFER TAB & FLOATING MINI APP
 // ==========================================
-const transferServerUrl = document.getElementById('transferServerUrl');
-const transferQrBtn = document.getElementById('transferQrBtn');
-const transferPopoutBtn = document.getElementById('transferPopoutBtn');
-const transferFolderBtn = document.getElementById('transferFolderBtn');
-const filePickerNotch = document.getElementById('filePickerNotch');
-const notchDropzone = document.getElementById('notchDropzone');
-const notchSharedBanner = document.getElementById('notchSharedBanner');
-const notchSharedText = document.getElementById('notchSharedText');
-const notchClearSharedBtn = document.getElementById('notchClearSharedBtn');
-const albumBtns = document.querySelectorAll('.album-btn');
-const notchClearHistoryBtn = document.getElementById('notchClearHistoryBtn');
-const notchGalleryList = document.getElementById('notchGalleryList');
-const notchQrSheet = document.getElementById('notchQrSheet');
-const notchQrBox = document.getElementById('notchQrBox');
-const notchQrUrl = document.getElementById('notchQrUrl');
-const closeNotchQrBtn = document.getElementById('closeNotchQrBtn');
-
 let transferInfo = null;
 let activeAlbum = 'all';
 
@@ -1708,5 +1722,22 @@ if (window.api) {
   }
 }
 
-refreshTransferInfo();
+// ==========================================
+// 13. MASTER INITIALIZATION
+// ==========================================
+function initNotcha() {
+  try {
+    switchTab(activeTab);
+    switchFocusSub(activeFocusSub);
+    updateDNDUI();
+    render();
+    tick(true);
+    refreshTransferInfo();
+    console.log('[Notcha Renderer] Master initialization successful. Tab:', activeTab);
+  } catch (err) {
+    console.error('[Notcha Renderer] Initialization error:', err);
+  }
+}
+
+initNotcha();
 
