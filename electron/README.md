@@ -1,8 +1,15 @@
-# Notcha 2.0.1
+# Notcha 3.0.0
 
 > A dynamic-island style desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, and power controls.
 
 ![Notcha](logo.png)
+
+## What's New in 3.0.0 (In Progress)
+
+- 🎧 **Audio Routing & Output Switcher**: Instant switching between AirPods, built-in speakers, HDMI, and USB audio interfaces.
+- 🗂️ **Cross-Platform File Transfer**: Local Wi-Fi transfer hub with QR code mobile web portal and transfer history/gallery.
+- 🖼️ **Dock Icon Window Previews**: Hover over dock icons to preview running app windows.
+- 🎚️ **Per-App Volume Mixer**: Software volume adjustments for individual apps.
 
 ## What's New in 2.0.1
 

@@ -1,6 +1,6 @@
 {
   "name": "notcha",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "Dynamic island desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, and power controls",
   "main": "main.js",
   "author": "Ukacha Juma",
@@ -31,10 +31,19 @@
       "renderer.js",
       "logo.png",
       "media-helper",
-      "nowplaying-query.swift"
+      "nowplaying-query.swift",
+      "dock-helper",
+      "dock-helper.swift",
+      "dock-preview.html",
+      "dock-preview.js",
+      "qr-generator.js",
+      "transfer-server.js",
+      "mini-transfer.html",
+      "mini-transfer.js"
     ],
     "asarUnpack": [
       "media-helper",
+      "dock-helper",
       "nowplaying-query.swift"
     ],
     "mac": {

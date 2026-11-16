@@ -1,8 +1,17 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, clipboard, dialog, systemPreferences } = require('electron');
 const path = require('path');
-const { exec, execFile } = require('child_process');
+const { exec, execFile, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const TransferServer = require('./transfer-server');
+
+// Prevent transient errors from displaying modal crash dialogs
+process.on('uncaughtException', (err) => {
+  console.error('[Notcha] Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Notcha] Unhandled Rejection:', reason);
+});
 
 // Canvas dimensions: large enough to fit expanded island tabs without clipping.
 const W = 640;
@@ -57,6 +66,251 @@ function createWindow() {
     win.showInactive();
     if (process.platform === 'darwin') app.dock.hide();
   });
+}
+
+// ---------- Transfer Server & Mini App ----------
+let transferServer = null;
+let miniWin = null;
+
+function broadcastTransferEvent(channel, data) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send(channel, data);
+  }
+  if (miniWin && !miniWin.isDestroyed()) {
+    miniWin.webContents.send(channel, data);
+  }
+}
+
+function initTransferServer() {
+  transferServer = new TransferServer({
+    onTransferReceived: (item) => {
+      broadcastTransferEvent('transfer-received', item);
+      broadcastTransferEvent('transfers-history-updated', transferServer.history);
+    },
+  });
+  transferServer.start().catch((err) => {
+    console.error('Failed to start transfer server:', err);
+  });
+}
+
+function createMiniTransferWindow() {
+  if (miniWin && !miniWin.isDestroyed()) {
+    miniWin.show();
+    miniWin.focus();
+    return;
+  }
+  const display = screen.getPrimaryDisplay();
+  const { width, height } = display.workAreaSize;
+  const miniW = 360;
+  const miniH = 480;
+
+  miniWin = new BrowserWindow({
+    width: miniW,
+    height: miniH,
+    x: Math.round((width - miniW) / 2),
+    y: Math.round((height - miniH) / 2),
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: true,
+    minWidth: 320,
+    minHeight: 400,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    hasShadow: true,
+    icon: path.join(__dirname, 'logo.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  miniWin.loadFile(path.join(__dirname, 'mini-transfer.html'));
+
+  miniWin.on('closed', () => {
+    miniWin = null;
+  });
+}
+
+// ---------- Dock Icon Hover Window Previews ----------
+let dockHelperProcess = null;
+let dockPreviewWin = null;
+let isMouseOverDockPreview = false;
+let dockPreviewHideTimer = null;
+let isDockPreviewReady = false;
+let pendingDockPreviewData = null;
+
+function requestMacPermissionsOnLaunch() {
+  if (process.platform !== 'darwin') return;
+  try {
+    // 1. Prompt Accessibility permission if not granted
+    if (systemPreferences && systemPreferences.isTrustedAccessibilityClient) {
+      systemPreferences.isTrustedAccessibilityClient(true);
+    }
+  } catch (err) {
+    console.warn('Accessibility permission check warning:', err);
+  }
+
+  // 2. Trigger native Screen Recording and Accessibility prompts via dock-helper / media-helper
+  try {
+    const dockHelperPath = getAssetPath('dock-helper');
+    if (fs.existsSync(dockHelperPath)) {
+      execFile(dockHelperPath, ['--prompt-permissions'], () => {});
+    }
+  } catch (_) {}
+}
+
+function createDockPreviewWindow() {
+  if (dockPreviewWin && !dockPreviewWin.isDestroyed()) return;
+
+  dockPreviewWin = new BrowserWindow({
+    width: 260,
+    height: 220,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  if (process.platform === 'darwin') {
+    dockPreviewWin.setAlwaysOnTop(true, 'screen-saver');
+    dockPreviewWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
+
+  isDockPreviewReady = false;
+  dockPreviewWin.webContents.once('did-finish-load', () => {
+    isDockPreviewReady = true;
+    if (pendingDockPreviewData && dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+      dockPreviewWin.webContents.send('dock-preview-data', pendingDockPreviewData);
+      pendingDockPreviewData = null;
+    }
+  });
+
+  dockPreviewWin.loadFile(path.join(__dirname, 'dock-preview.html'));
+
+  dockPreviewWin.on('closed', () => {
+    dockPreviewWin = null;
+    isDockPreviewReady = false;
+    pendingDockPreviewData = null;
+  });
+}
+
+function showDockPreview(data) {
+  try {
+    if (!data || !Array.isArray(data.windows) || data.windows.length === 0) return;
+
+    if (!dockPreviewWin || dockPreviewWin.isDestroyed()) {
+      createDockPreviewWindow();
+    }
+    clearTimeout(dockPreviewHideTimer);
+
+    const iconFrame = data.iconFrame || {};
+    const fx = Number.isFinite(iconFrame.x) ? iconFrame.x : 0;
+    const fy = Number.isFinite(iconFrame.y) ? iconFrame.y : 1000;
+    const fw = Number.isFinite(iconFrame.width) ? iconFrame.width : 44;
+    const fh = Number.isFinite(iconFrame.height) ? iconFrame.height : 44;
+
+    const cardWidth = 230;
+    const count = Math.min(3, data.windows.length);
+    const previewW = Math.round(count * cardWidth + 24);
+    const previewH = 210;
+
+    const display = screen.getDisplayNearestPoint({ x: Math.round(fx), y: Math.round(fy) }) || screen.getPrimaryDisplay();
+    const { x: dispX, y: dispY, width: dispW, height: dispH } = display.bounds;
+
+    let posX = Math.round(fx + (fw - previewW) / 2);
+    posX = Math.max(dispX + 12, Math.min(dispX + dispW - previewW - 12, posX));
+
+    let posY = Math.round(fy - previewH - 8);
+    if (posY < dispY + 30) {
+      posY = Math.round(fy + fh + 8);
+    }
+
+    if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+      dockPreviewWin.setBounds({ x: posX, y: posY, width: previewW, height: previewH });
+      if (isDockPreviewReady) {
+        dockPreviewWin.webContents.send('dock-preview-data', data);
+      } else {
+        pendingDockPreviewData = data;
+      }
+      dockPreviewWin.showInactive();
+    }
+  } catch (err) {
+    console.warn('showDockPreview error:', err);
+  }
+}
+
+function hideDockPreview() {
+  clearTimeout(dockPreviewHideTimer);
+  dockPreviewHideTimer = setTimeout(() => {
+    try {
+      if (!isMouseOverDockPreview && dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+        dockPreviewWin.hide();
+      }
+    } catch (_) {}
+  }, 260);
+}
+
+function startDockHelper() {
+  if (process.platform !== 'darwin') return;
+  const dockHelperPath = getAssetPath('dock-helper');
+  if (!fs.existsSync(dockHelperPath)) return;
+
+  createDockPreviewWindow();
+
+  try {
+    dockHelperProcess = spawn(dockHelperPath, [], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    dockHelperProcess.on('error', (err) => {
+      console.warn('dockHelperProcess error:', err.message);
+      dockHelperProcess = null;
+    });
+
+    if (dockHelperProcess.stdin) {
+      dockHelperProcess.stdin.on('error', (err) => {
+        console.warn('dockHelperProcess.stdin error:', err.message);
+      });
+    }
+
+    let buffer = '';
+    dockHelperProcess.stdout.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const msg = JSON.parse(trimmed);
+          if (msg.type === 'hover') {
+            showDockPreview(msg);
+          } else if (msg.type === 'leave') {
+            hideDockPreview();
+          }
+        } catch (_) {}
+      }
+    });
+
+    dockHelperProcess.on('exit', () => {
+      dockHelperProcess = null;
+    });
+  } catch (err) {
+    console.error('Failed to spawn dock-helper:', err);
+  }
 }
 
 // ---------- Clipboard Watcher ----------
@@ -664,6 +918,211 @@ ipcMain.on('set-system-volume', (_e, vol) => {
   }
 });
 
+// Audio routing devices
+ipcMain.handle('get-audio-devices', async () => {
+  if (process.platform === 'darwin') {
+    return new Promise((resolve) => {
+      execFile(mediaHelperPath, ['getaudiodevices'], (err, stdout) => {
+        if (!err && stdout && stdout.trim()) {
+          try {
+            const list = JSON.parse(stdout.trim());
+            return resolve(Array.isArray(list) ? list : []);
+          } catch (_) {}
+        }
+        resolve([]);
+      });
+    });
+  }
+  return [];
+});
+
+ipcMain.handle('set-audio-device', async (_e, deviceId) => {
+  if (!deviceId) return false;
+  if (process.platform === 'darwin') {
+    return new Promise((resolve) => {
+      execFile(mediaHelperPath, ['setaudiodevice', String(deviceId)], (err, stdout) => {
+        if (!err && stdout && stdout.trim().includes('OK')) {
+          return resolve(true);
+        }
+        resolve(false);
+      });
+    });
+  }
+  return false;
+});
+
+// ---------- Multi-App Volume Mixer ----------
+const appVolumeStore = {
+  spotify: 75,
+  'apple-music': 75,
+  vlc: 80,
+  quicktime: 80,
+  chrome: 100,
+  brave: 100,
+  safari: 100,
+  arc: 100,
+  telegram: 100,
+  discord: 100,
+};
+const appMuteStore = {};
+
+async function queryRunningAudioApps() {
+  const isMac = process.platform === 'darwin';
+  const apps = [
+    {
+      id: 'system',
+      name: 'Master Output',
+      icon: 'speaker',
+      volume: cachedSystemVolume,
+      isMuted: cachedSystemVolume === 0,
+      isMaster: true,
+    },
+  ];
+
+  if (!isMac) return apps;
+
+  return new Promise((resolve) => {
+    const script = `
+      set appList to ""
+      if application "Spotify" is running then
+        tell application "Spotify" to set v to sound volume
+        set appList to appList & "spotify:Spotify:" & v & ";"
+      end if
+      if application "Music" is running then
+        tell application "Music" to set v to sound volume
+        set appList to appList & "apple-music:Apple Music:" & v & ";"
+      end if
+      if application "QuickTime Player" is running then
+        set appList to appList & "quicktime:QuickTime Player:80;"
+      end if
+      if application "VLC" is running then
+        set appList to appList & "vlc:VLC:80;"
+      end if
+      if application "Google Chrome" is running then
+        set appList to appList & "chrome:Google Chrome:100;"
+      end if
+      if application "Brave Browser" is running then
+        set appList to appList & "brave:Brave Browser:100;"
+      end if
+      if application "Safari" is running then
+        set appList to appList & "safari:Safari:100;"
+      end if
+      if application "Arc" is running then
+        set appList to appList & "arc:Arc:100;"
+      end if
+      if application "Telegram" is running then
+        set appList to appList & "telegram:Telegram:100;"
+      end if
+      if application "Discord" is running then
+        set appList to appList & "discord:Discord:100;"
+      end if
+      return appList
+    `;
+
+    execFile('osascript', ['-e', script], (err, stdout) => {
+      if (!err && stdout) {
+        const entries = stdout.trim().split(';').filter(Boolean);
+        for (const entry of entries) {
+          const parts = entry.split(':');
+          const id = parts[0];
+          const name = parts[1];
+          const volStr = parts[2];
+          if (id && name) {
+            const vol = parseInt(volStr, 10);
+            const volume = Number.isFinite(vol) ? vol : (appVolumeStore[id] || 80);
+            appVolumeStore[id] = volume;
+            apps.push({
+              id,
+              name,
+              icon: id,
+              volume: appMuteStore[id] ? 0 : volume,
+              savedVolume: volume,
+              isMuted: !!appMuteStore[id],
+              isMaster: false,
+            });
+          }
+        }
+      }
+
+      if (apps.length === 1) {
+        ['spotify', 'apple-music'].forEach((id) => {
+          const name = id === 'spotify' ? 'Spotify' : 'Apple Music';
+          const vol = appVolumeStore[id] || 75;
+          apps.push({
+            id,
+            name,
+            icon: id,
+            volume: appMuteStore[id] ? 0 : vol,
+            savedVolume: vol,
+            isMuted: !!appMuteStore[id],
+            isMaster: false,
+            isInactive: true,
+          });
+        });
+      }
+
+      resolve(apps);
+    });
+  });
+}
+
+ipcMain.handle('get-app-volumes', async () => {
+  return await queryRunningAudioApps();
+});
+
+ipcMain.on('set-app-volume', (_e, { id, volume }) => {
+  const v = Math.max(0, Math.min(100, Math.round(volume)));
+  appVolumeStore[id] = v;
+  delete appMuteStore[id];
+
+  if (id === 'system') {
+    cachedSystemVolume = v;
+    if (process.platform === 'darwin') {
+      execFile(mediaHelperPath, ['volume', String(v)], (err) => {
+        if (err) runAppleScript(`set volume output volume ${v}`);
+      });
+    }
+  } else if (id === 'spotify') {
+    runAppleScript(`if application "Spotify" is running then tell application "Spotify" to set sound volume to ${v}`);
+  } else if (id === 'apple-music' || id === 'music') {
+    runAppleScript(`if application "Music" is running then tell application "Music" to set sound volume to ${v}`);
+  } else if (id === 'vlc') {
+    runAppleScript(`if application "VLC" is running then tell application "VLC" to set volume to ${Math.round(v * 2.56)}`);
+  } else if (id === 'quicktime') {
+    runAppleScript(`if application "QuickTime Player" is running then tell application "QuickTime Player" to set audio volume of document 1 to ${v / 100}`);
+  }
+});
+
+ipcMain.handle('toggle-app-mute', async (_e, id) => {
+  if (!id) return false;
+  if (id === 'system') {
+    if (cachedSystemVolume > 0) {
+      appMuteStore['system'] = cachedSystemVolume;
+      cachedSystemVolume = 0;
+      execFile(mediaHelperPath, ['volume', '0']);
+    } else {
+      const restore = appMuteStore['system'] || 50;
+      delete appMuteStore['system'];
+      cachedSystemVolume = restore;
+      execFile(mediaHelperPath, ['volume', String(restore)]);
+    }
+    return cachedSystemVolume === 0;
+  }
+
+  if (appMuteStore[id]) {
+    const restore = appMuteStore[id];
+    delete appMuteStore[id];
+    if (id === 'spotify') runAppleScript(`if application "Spotify" is running then tell application "Spotify" to set sound volume to ${restore}`);
+    else if (id === 'apple-music') runAppleScript(`if application "Music" is running then tell application "Music" to set sound volume to ${restore}`);
+    return false;
+  } else {
+    appMuteStore[id] = appVolumeStore[id] || 75;
+    if (id === 'spotify') runAppleScript(`if application "Spotify" is running then tell application "Spotify" to set sound volume to 0`);
+    else if (id === 'apple-music') runAppleScript(`if application "Music" is running then tell application "Music" to set sound volume to 0`);
+    return true;
+  }
+});
+
 // Clipboard
 ipcMain.handle('get-clipboard-history', () => clipboardHistory);
 ipcMain.on('copy-clipboard-text', (_e, text) => {
@@ -685,11 +1144,137 @@ ipcMain.on('clear-clipboard', () => {
   }
 });
 
+// ---------- Transfer Server & Mini App IPC ----------
+ipcMain.on('open-mini-transfer', () => {
+  createMiniTransferWindow();
+});
+
+ipcMain.on('close-mini-transfer', () => {
+  if (miniWin && !miniWin.isDestroyed()) {
+    miniWin.close();
+  }
+});
+
+ipcMain.on('dock-to-notch', () => {
+  if (miniWin && !miniWin.isDestroyed()) {
+    miniWin.close();
+  }
+  if (win && !win.isDestroyed()) {
+    win.showInactive();
+    win.webContents.send('focus-transfer-tab');
+  }
+});
+
+ipcMain.handle('get-transfer-server-info', () => {
+  return transferServer ? transferServer.getInfo() : null;
+});
+
+ipcMain.handle('choose-files-to-share', async () => {
+  if (!transferServer) return [];
+  const result = await dialog.showOpenDialog({
+    title: 'Select Files to Share via Notcha Drop',
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+    transferServer.shareFiles(result.filePaths);
+    broadcastTransferEvent('shared-files-updated', transferServer.sharedFiles);
+    broadcastTransferEvent('transfers-history-updated', transferServer.history);
+    return transferServer.sharedFiles;
+  }
+  return transferServer.sharedFiles;
+});
+
+ipcMain.handle('share-files', async (_e, paths) => {
+  if (transferServer && Array.isArray(paths)) {
+    transferServer.shareFiles(paths);
+    broadcastTransferEvent('shared-files-updated', transferServer.sharedFiles);
+    broadcastTransferEvent('transfers-history-updated', transferServer.history);
+    return transferServer.sharedFiles;
+  }
+  return [];
+});
+
+ipcMain.handle('clear-shared-files', async () => {
+  if (transferServer) {
+    transferServer.clearSharedFiles();
+    broadcastTransferEvent('shared-files-updated', transferServer.sharedFiles);
+  }
+  return true;
+});
+
+ipcMain.handle('get-transfers-history', () => {
+  return transferServer ? transferServer.history : [];
+});
+
+ipcMain.handle('clear-transfers-history', async () => {
+  if (transferServer) {
+    transferServer.clearHistory();
+    broadcastTransferEvent('transfers-history-updated', transferServer.history);
+  }
+  return true;
+});
+
+ipcMain.on('open-transfers-folder', () => {
+  const dir = transferServer ? transferServer.downloadDir : path.join(os.homedir(), 'Downloads', 'Notcha Transfers');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  shell.openPath(dir);
+});
+
+ipcMain.on('show-item-in-folder', (_e, filePath) => {
+  if (filePath && fs.existsSync(filePath)) {
+    shell.showItemInFolder(filePath);
+  } else if (transferServer) {
+    shell.openPath(transferServer.downloadDir);
+  }
+});
+
+// ---------- Dock Preview IPC ----------
+ipcMain.on('dock-preview-mouse-enter', () => {
+  isMouseOverDockPreview = true;
+  clearTimeout(dockPreviewHideTimer);
+});
+
+ipcMain.on('dock-preview-mouse-leave', () => {
+  isMouseOverDockPreview = false;
+  hideDockPreview();
+});
+
+ipcMain.on('activate-dock-window', (_e, payload) => {
+  try {
+    if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {
+      dockPreviewWin.hide();
+    }
+    isMouseOverDockPreview = false;
+    if (dockHelperProcess && dockHelperProcess.stdin && dockHelperProcess.stdin.writable && payload) {
+      dockHelperProcess.stdin.write(JSON.stringify({ action: 'raise', pid: payload.pid, index: payload.index }) + '\n');
+    }
+  } catch (err) {
+    console.warn('activate-dock-window error:', err);
+  }
+});
+
+ipcMain.on('close-dock-window', (_e, payload) => {
+  try {
+    if (dockHelperProcess && dockHelperProcess.stdin && dockHelperProcess.stdin.writable && payload) {
+      dockHelperProcess.stdin.write(JSON.stringify({ action: 'close', pid: payload.pid, index: payload.index }) + '\n');
+    }
+  } catch (err) {
+    console.warn('close-dock-window error:', err);
+  }
+});
+
 // ---------- Lifecycle ----------
 app.whenReady().then(() => {
-  if (process.platform === 'darwin') app.dock.hide();
+  if (process.platform === 'darwin') {
+    app.dock.hide();
+    requestMacPermissionsOnLaunch();
+  }
   createWindow();
   startClipboardWatcher();
+  initTransferServer();
+  startDockHelper();
 
   globalShortcut.register('CommandOrControl+Alt+N', () => {
     if (win && !win.isDestroyed()) win.webContents.send('toggle-hide');
@@ -700,5 +1285,14 @@ app.whenReady().then(() => {
   screen.on('display-removed', () => place());
 });
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  if (transferServer) transferServer.stop();
+  if (dockHelperProcess) {
+    try {
+      dockHelperProcess.stdin.write(JSON.stringify({ action: 'quit' }) + '\n');
+      dockHelperProcess.kill();
+    } catch (_) {}
+  }
+  globalShortcut.unregisterAll();
+});
 app.on('window-all-closed', () => app.quit());

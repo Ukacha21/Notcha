@@ -1,5 +1,5 @@
 // ==========================================
-// Notcha 2.0.1 - Enhanced Renderer Process
+// Notcha 3.0.0 - Enhanced Renderer Process
 // ==========================================
 
 const $ = (id) => document.getElementById(id);
@@ -117,6 +117,17 @@ function switchTab(tabName) {
   tabBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabName));
   panels.forEach((p) => p.classList.toggle('active', p.id === `panel${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`));
   hidePowerConfirmation();
+  if (tabName === 'music') {
+    refreshAudioDevices();
+  } else {
+    closeAudioRouteSheet();
+    closeVolumeMixerSheet();
+  }
+  if (tabName === 'transfer') {
+    refreshTransferInfo();
+  } else {
+    closeTransferQrSheet();
+  }
 }
 
 tabBtns.forEach((btn) => {
@@ -561,6 +572,253 @@ setInterval(() => {
   }
 }, 1000);
 
+// ==========================================
+// AUDIO OUTPUT ROUTING
+// ==========================================
+const audioRouteSheet = $('audioRouteSheet');
+const routeSheetCloseBtn = $('routeSheetCloseBtn');
+const routeDeviceList = $('routeDeviceList');
+let audioDevices = [];
+let currentOutputDevice = null;
+
+if (routeSheetCloseBtn) {
+  routeSheetCloseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAudioRouteSheet();
+  });
+}
+
+function getDeviceIconSvg(transport) {
+  if (transport === 'bluetooth') {
+    return `<svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>`;
+  }
+  if (transport === 'headphones') {
+    return `<svg viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>`;
+  }
+  if (transport === 'display') {
+    return `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+  }
+  if (transport === 'usb') {
+    return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10l4-4 4 4"/></svg>`;
+  }
+  if (transport === 'airplay') {
+    return `<svg viewBox="0 0 24 24"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+}
+
+async function refreshAudioDevices() {
+  if (!window.api || !window.api.getAudioDevices) return;
+  try {
+    const list = await window.api.getAudioDevices();
+    if (Array.isArray(list) && list.length > 0) {
+      audioDevices = list;
+      const def = list.find((d) => d.isDefault) || list[0];
+      currentOutputDevice = def;
+      updateAudioPillLabels();
+      renderAudioRouteList();
+    }
+  } catch (_) {}
+}
+
+function updateAudioPillLabels() {
+  if (!currentOutputDevice) return;
+  const pills = document.querySelectorAll('.audio-output-pill');
+  pills.forEach((pill) => {
+    const iconSpan = pill.querySelector('.route-pill-icon');
+    const nameSpan = pill.querySelector('.route-pill-name');
+    if (iconSpan) iconSpan.innerHTML = getDeviceIconSvg(currentOutputDevice.transport);
+    if (nameSpan) {
+      nameSpan.textContent = currentOutputDevice.name;
+      nameSpan.title = currentOutputDevice.name;
+    }
+  });
+}
+
+function renderAudioRouteList() {
+  if (!routeDeviceList) return;
+  if (!audioDevices || audioDevices.length === 0) {
+    routeDeviceList.innerHTML = `<div style="text-align:center; font-size:11px; color:var(--text-mute); padding:16px;">No audio output devices detected</div>`;
+    return;
+  }
+
+  routeDeviceList.innerHTML = audioDevices.map((dev) => `
+    <button class="route-device-item ${dev.isDefault ? 'active' : ''}" data-id="${dev.id}" type="button">
+      <div class="route-device-left">
+        ${getDeviceIconSvg(dev.transport)}
+        <span class="route-device-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span>
+      </div>
+      <div class="route-device-right">
+        <span class="route-transport-tag">${escapeHtml(dev.transport)}</span>
+        <svg class="route-check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </button>
+  `).join('');
+
+  routeDeviceList.querySelectorAll('.route-device-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = item.dataset.id;
+      const target = audioDevices.find((d) => String(d.id) === String(id));
+      if (!target) return;
+
+      const ok = await window.api.setAudioDevice(target.id);
+      if (ok) {
+        audioDevices.forEach((d) => { d.isDefault = (String(d.id) === String(target.id)); });
+        currentOutputDevice = target;
+        updateAudioPillLabels();
+        renderAudioRouteList();
+
+        try {
+          const newVol = await window.api.getSystemVolume();
+          if (typeof newVol === 'number' && activeMedia) {
+            activeMedia.volume = newVol;
+            const volEl = document.querySelector('.card-vol');
+            const volFill = document.querySelector('.volume-row .slider-fill');
+            const volNum = document.querySelector('.vol-num');
+            if (volEl) volEl.value = newVol;
+            if (volFill) volFill.style.width = `${newVol}%`;
+            if (volNum) volNum.textContent = `${newVol}%`;
+          }
+        } catch (_) {}
+      }
+    });
+  });
+}
+
+function openAudioRouteSheet() {
+  if (!audioRouteSheet) return;
+  audioRouteSheet.style.display = 'flex';
+  refreshAudioDevices();
+}
+
+function closeAudioRouteSheet() {
+  if (!audioRouteSheet) return;
+  audioRouteSheet.style.display = 'none';
+}
+
+// ---------- Multi-App Volume Mixer Controller ----------
+const volumeMixerSheet = $('volumeMixerSheet');
+const mixerAppList = $('mixerAppList');
+const mixerCloseBtn = $('mixerCloseBtn');
+
+function openVolumeMixerSheet() {
+  if (!volumeMixerSheet) return;
+  volumeMixerSheet.style.display = 'flex';
+  refreshVolumeMixer();
+}
+
+function closeVolumeMixerSheet() {
+  if (!volumeMixerSheet) return;
+  volumeMixerSheet.style.display = 'none';
+}
+
+if (mixerCloseBtn) {
+  mixerCloseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeVolumeMixerSheet();
+  });
+}
+
+function getAppMixerIconSvg(iconId) {
+  switch (iconId) {
+    case 'spotify':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#10b981;"><circle cx="12" cy="12" r="10"/><path d="M8 11.5c3.5-1 6.5-.5 9 1M8.5 14.5c2.5-.7 5-.3 7 .7M9 17.5c2-.5 4-.2 5.5.5" stroke="#fff" stroke-width="1.5" fill="none"/></svg>';
+    case 'apple-music':
+    case 'music':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#f43f5e;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+    case 'vlc':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#f59e0b;"><path d="M12 2L4 20h16L12 2z"/></svg>';
+    case 'chrome':
+    case 'brave':
+    case 'safari':
+    case 'arc':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#38bdf8;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+    case 'telegram':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#38bdf8;"><path d="M21.5 2L2 9.5l7 3 2.5 7.5L15 15l6.5 5L21.5 2z"/></svg>';
+    case 'discord':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#818cf8;"><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><path d="M7 6h10c2 2 3 6 2 11-2 1.5-4 1.5-5 1l-1-1-1 1c-1 .5-3 .5-5-1-1-5 0-9 2-11z"/></svg>';
+    default:
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#38bdf8;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+  }
+}
+
+async function refreshVolumeMixer() {
+  if (!mixerAppList || !window.api || !window.api.getAppVolumes) return;
+  try {
+    const apps = await window.api.getAppVolumes();
+    if (!Array.isArray(apps) || apps.length === 0) {
+      mixerAppList.innerHTML = '<div style="font-size:11px;color:var(--text-mute);text-align:center;padding:16px;">No audio sessions detected.</div>';
+      return;
+    }
+
+    mixerAppList.innerHTML = '';
+    apps.forEach((app) => {
+      const row = document.createElement('div');
+      row.className = `mixer-row ${app.isMaster ? 'master' : ''}`;
+      const iconSvg = getAppMixerIconSvg(app.icon);
+      const isMuted = !!app.isMuted || app.volume === 0;
+
+      row.innerHTML = `
+        <div class="mixer-app-badge">
+          <span class="mixer-icon-wrap">${iconSvg}</span>
+          <span class="mixer-app-label" title="${escapeHtml(app.name)}">${escapeHtml(app.name)}</span>
+        </div>
+        <div class="mixer-slider-wrap">
+          <div class="mixer-slider-container">
+            <input type="range" class="mixer-slider" min="0" max="100" value="${app.volume}" />
+          </div>
+          <span class="mixer-pct">${app.volume}%</span>
+          <button class="mixer-mute-btn ${isMuted ? 'muted' : ''}" title="${isMuted ? 'Unmute' : 'Mute'}">
+            ${isMuted
+              ? '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
+              : '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
+            }
+          </button>
+        </div>
+      `;
+
+      const slider = row.querySelector('.mixer-slider');
+      const pctEl = row.querySelector('.mixer-pct');
+      const muteBtn = row.querySelector('.mixer-mute-btn');
+
+      if (slider && pctEl) {
+        slider.addEventListener('input', (e) => {
+          e.stopPropagation();
+          const val = parseInt(slider.value, 10);
+          pctEl.textContent = `${val}%`;
+          if (window.api && window.api.setAppVolume) {
+            window.api.setAppVolume({ id: app.id, volume: val });
+          }
+          if (app.isMaster) {
+            cachedSystemVolume = val;
+            const mainVol = document.querySelector('.card-vol');
+            const mainFill = document.querySelector('.volume-row .slider-fill');
+            const mainNum = document.querySelector('.vol-num');
+            if (mainVol) mainVol.value = val;
+            if (mainFill) mainFill.style.width = `${val}%`;
+            if (mainNum) mainNum.textContent = `${val}%`;
+          }
+        });
+      }
+
+      if (muteBtn) {
+        muteBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (window.api && window.api.toggleAppMute) {
+            await window.api.toggleAppMute(app.id);
+            refreshVolumeMixer();
+          }
+        });
+      }
+
+      mixerAppList.appendChild(row);
+    });
+  } catch (err) {
+    console.error('refreshVolumeMixer error:', err);
+  }
+}
+
 function renderActiveMedia() {
   if (!mediaContainer) return;
 
@@ -572,8 +830,33 @@ function renderActiveMedia() {
         </div>
         <div class="empty-title">No Media Playing</div>
         <div class="empty-subtitle">Play audio in Spotify, Apple Music, YouTube, VLC or your browser to control it here.</div>
+        <div class="empty-route-section">
+          <button class="audio-output-pill empty-output-pill" id="emptyAudioOutputBtn" title="Switch Audio Output Device" type="button">
+            <span class="route-pill-icon">${getDeviceIconSvg(currentOutputDevice ? currentOutputDevice.transport : 'speaker')}</span>
+            <span class="route-pill-name">${escapeHtml(currentOutputDevice ? currentOutputDevice.name : 'Audio Output')}</span>
+            <svg class="route-pill-arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <button class="audio-output-pill empty-output-pill" id="emptyMixerBtn" title="Open Multi-App Volume Mixer" type="button">
+            <span class="route-pill-icon"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/></svg></span>
+            <span class="route-pill-name">Volume Mixer</span>
+          </button>
+        </div>
       </div>
     `;
+    const emptyBtn = mediaContainer.querySelector('#emptyAudioOutputBtn');
+    if (emptyBtn) {
+      emptyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAudioRouteSheet();
+      });
+    }
+    const emptyMixerBtn = mediaContainer.querySelector('#emptyMixerBtn');
+    if (emptyMixerBtn) {
+      emptyMixerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openVolumeMixerSheet();
+      });
+    }
     updateCompactCompanion();
     return;
   }
@@ -612,6 +895,16 @@ function renderActiveMedia() {
     if (iconCircle && !iconCircle.classList.contains(s.icon)) {
       iconCircle.className = `app-icon-circle ${s.icon}`;
       iconCircle.innerHTML = getAppIconSvg(s.icon);
+    }
+
+    const outputPillName = existingCard.querySelector('.audio-output-pill .route-pill-name');
+    const outputPillIcon = existingCard.querySelector('.audio-output-pill .route-pill-icon');
+    if (outputPillName && currentOutputDevice) {
+      outputPillName.textContent = currentOutputDevice.name;
+      outputPillName.title = currentOutputDevice.name;
+    }
+    if (outputPillIcon && currentOutputDevice) {
+      outputPillIcon.innerHTML = getDeviceIconSvg(currentOutputDevice.transport);
     }
 
     const statusPill = existingCard.querySelector('.status-pill');
@@ -664,8 +957,19 @@ function renderActiveMedia() {
             <span class="app-icon-circle ${s.icon}">${getAppIconSvg(s.icon)}</span>
             <span class="app-name-label">${escapeHtml(s.name)}</span>
           </div>
-          <div class="status-pill ${isPlaying ? 'playing' : ''}">
-            ${isPlaying ? '<span class="status-pulse-dot"></span> Active' : '⏸ Paused'}
+          <div class="header-right-actions">
+            <button class="audio-output-pill" id="audioOutputBtn" title="Switch Audio Output Device" type="button">
+              <span class="route-pill-icon">${getDeviceIconSvg(currentOutputDevice ? currentOutputDevice.transport : 'speaker')}</span>
+              <span class="route-pill-name">${escapeHtml(currentOutputDevice ? currentOutputDevice.name : 'Audio Output')}</span>
+              <svg class="route-pill-arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <button class="audio-output-pill" id="activeMixerBtn" title="Open Multi-App Volume Mixer" type="button">
+              <span class="route-pill-icon"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/></svg></span>
+              <span class="route-pill-name">Mixer</span>
+            </button>
+            <div class="status-pill ${isPlaying ? 'playing' : ''}">
+              ${isPlaying ? '<span class="status-pulse-dot"></span> Active' : '⏸ Paused'}
+            </div>
           </div>
         </div>
 
@@ -720,6 +1024,22 @@ function renderActiveMedia() {
     `;
 
     const card = mediaContainer.querySelector('.active-media-card');
+    const routeBtn = card.querySelector('#audioOutputBtn');
+    if (routeBtn) {
+      routeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAudioRouteSheet();
+      });
+    }
+
+    const mixerBtn = card.querySelector('#activeMixerBtn');
+    if (mixerBtn) {
+      mixerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openVolumeMixerSheet();
+      });
+    }
+
     card.querySelector('.card-playpause').addEventListener('click', (e) => {
       e.stopPropagation();
       handleMediaPlayPause();
@@ -932,6 +1252,9 @@ if (powerConfirmProceedBtn) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hidePowerConfirmation();
+    closeAudioRouteSheet();
+    closeVolumeMixerSheet();
+    closeTransferQrSheet();
   }
 });
 
@@ -1099,3 +1422,291 @@ function tick(force) {
 setInterval(() => tick(false), 250);
 updateFocusDurationDisplay();
 render();
+refreshAudioDevices();
+setInterval(() => {
+  if (activeTab === 'music') {
+    refreshAudioDevices();
+  }
+}, 4000);
+
+// ==========================================
+// 12. TRANSFER TAB & FLOATING MINI APP
+// ==========================================
+const transferServerUrl = document.getElementById('transferServerUrl');
+const transferQrBtn = document.getElementById('transferQrBtn');
+const transferPopoutBtn = document.getElementById('transferPopoutBtn');
+const transferFolderBtn = document.getElementById('transferFolderBtn');
+const filePickerNotch = document.getElementById('filePickerNotch');
+const notchDropzone = document.getElementById('notchDropzone');
+const notchSharedBanner = document.getElementById('notchSharedBanner');
+const notchSharedText = document.getElementById('notchSharedText');
+const notchClearSharedBtn = document.getElementById('notchClearSharedBtn');
+const albumBtns = document.querySelectorAll('.album-btn');
+const notchClearHistoryBtn = document.getElementById('notchClearHistoryBtn');
+const notchGalleryList = document.getElementById('notchGalleryList');
+const notchQrSheet = document.getElementById('notchQrSheet');
+const notchQrBox = document.getElementById('notchQrBox');
+const notchQrUrl = document.getElementById('notchQrUrl');
+const closeNotchQrBtn = document.getElementById('closeNotchQrBtn');
+
+let transferInfo = null;
+let activeAlbum = 'all';
+
+async function refreshTransferInfo() {
+  if (!window.api || !window.api.getTransferServerInfo) return;
+  try {
+    transferInfo = await window.api.getTransferServerInfo();
+    if (!transferInfo) return;
+
+    if (transferServerUrl) {
+      transferServerUrl.textContent = transferInfo.url ? transferInfo.url.replace(/^http:\/\//, '') : 'Wi-Fi Drop Active';
+    }
+    if (notchQrUrl) {
+      notchQrUrl.textContent = transferInfo.url || '';
+    }
+    if (notchQrBox && transferInfo.qrSvg) {
+      notchQrBox.innerHTML = transferInfo.qrSvg;
+    }
+
+    updateNotchSharedFiles(transferInfo.sharedFiles || []);
+    renderTransferGallery();
+  } catch (err) {
+    console.error('Failed to refresh transfer info:', err);
+  }
+}
+
+function updateNotchSharedFiles(files) {
+  if (!notchSharedBanner || !notchSharedText) return;
+  if (!files || files.length === 0) {
+    notchSharedBanner.style.display = 'none';
+    return;
+  }
+  notchSharedBanner.style.display = 'flex';
+  if (files.length === 1) {
+    notchSharedText.textContent = `Sharing "${files[0].name}" (${files[0].formattedSize})`;
+  } else {
+    notchSharedText.textContent = `Sharing ${files.length} files to paired devices`;
+  }
+}
+
+function getFileCategoryIcon(type) {
+  switch (type) {
+    case 'images': return '🖼️';
+    case 'videos': return '🎬';
+    case 'docs': return '📄';
+    case 'archives': return '📦';
+    default: return '📁';
+  }
+}
+
+function formatTransferTime(timestamp) {
+  if (!timestamp) return '';
+  const d = new Date(timestamp);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function renderTransferGallery() {
+  if (!notchGalleryList) return;
+  const list = (transferInfo && transferInfo.history) ? transferInfo.history : [];
+  const filtered = activeAlbum === 'all' ? list : list.filter((item) => item.type === activeAlbum);
+
+  if (filtered.length === 0) {
+    notchGalleryList.innerHTML = '<div class="empty-gallery">No files in this album yet. Drop files above or connect your phone!</div>';
+    return;
+  }
+
+  notchGalleryList.innerHTML = '';
+  filtered.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'gallery-row';
+
+    const icon = getFileCategoryIcon(item.type);
+    const dirText = item.direction === 'received' ? '📥 Recv' : '📤 Sent';
+    const device = item.device ? ` • ${item.device}` : '';
+
+    row.innerHTML = `
+      <div class="gallery-thumb">${icon}</div>
+      <div class="gallery-info">
+        <div class="gallery-name" title="${item.name}">${item.name}</div>
+        <div class="gallery-meta">${dirText} • ${item.formattedSize || ''} • ${formatTransferTime(item.time)}${device}</div>
+      </div>
+      <button class="gallery-reveal" title="Show in Finder">
+        <svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
+      </button>
+    `;
+
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.gallery-reveal')) return;
+      if (window.api && window.api.showItemInFolder && item.path) {
+        window.api.showItemInFolder(item.path);
+      }
+    });
+
+    const revealBtn = row.querySelector('.gallery-reveal');
+    if (revealBtn) {
+      revealBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.api && window.api.showItemInFolder && item.path) {
+          window.api.showItemInFolder(item.path);
+        }
+      });
+    }
+
+    notchGalleryList.appendChild(row);
+  });
+}
+
+function openTransferQrSheet() {
+  if (notchQrSheet) notchQrSheet.classList.add('active');
+}
+function closeTransferQrSheet() {
+  if (notchQrSheet) notchQrSheet.classList.remove('active');
+}
+
+// QR toggle
+if (transferQrBtn) {
+  transferQrBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (notchQrSheet && notchQrSheet.classList.contains('active')) {
+      closeTransferQrSheet();
+    } else {
+      openTransferQrSheet();
+    }
+  });
+}
+if (closeNotchQrBtn) {
+  closeNotchQrBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeTransferQrSheet();
+  });
+}
+
+// Popout Mini App button
+if (transferPopoutBtn) {
+  transferPopoutBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.openMiniTransfer) {
+      window.api.openMiniTransfer();
+    }
+  });
+}
+
+// Open folder
+if (transferFolderBtn) {
+  transferFolderBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.openTransfersFolder) {
+      window.api.openTransfersFolder();
+    }
+  });
+}
+
+// Album buttons
+albumBtns.forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    activeAlbum = btn.dataset.album || 'all';
+    albumBtns.forEach((b) => b.classList.toggle('active', b === btn));
+    renderTransferGallery();
+  });
+});
+
+// Dropzone Drag & Drop
+if (notchDropzone) {
+  notchDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    notchDropzone.classList.add('dragover');
+  });
+
+  notchDropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    notchDropzone.classList.remove('dragover');
+  });
+
+  notchDropzone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    notchDropzone.classList.remove('dragover');
+
+    const files = Array.from(e.dataTransfer.files || []);
+    const paths = files.map((f) => f.path).filter(Boolean);
+    if (paths.length > 0 && window.api && window.api.shareFiles) {
+      await window.api.shareFiles(paths);
+      refreshTransferInfo();
+    }
+  });
+
+  notchDropzone.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.chooseFilesToShare) {
+      await window.api.chooseFilesToShare();
+      refreshTransferInfo();
+    } else if (filePickerNotch) {
+      filePickerNotch.click();
+    }
+  });
+}
+
+if (filePickerNotch) {
+  filePickerNotch.addEventListener('change', async () => {
+    const files = Array.from(filePickerNotch.files || []);
+    const paths = files.map((f) => f.path).filter(Boolean);
+    if (paths.length > 0 && window.api && window.api.shareFiles) {
+      await window.api.shareFiles(paths);
+      refreshTransferInfo();
+    }
+    filePickerNotch.value = '';
+  });
+}
+
+// Clear buttons
+if (notchClearSharedBtn) {
+  notchClearSharedBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.clearSharedFiles) {
+      await window.api.clearSharedFiles();
+    }
+  });
+}
+
+if (notchClearHistoryBtn) {
+  notchClearHistoryBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.clearTransfersHistory) {
+      await window.api.clearTransfersHistory();
+    }
+  });
+}
+
+// Wire transfer IPC listeners
+if (window.api) {
+  if (window.api.onTransferReceived) {
+    window.api.onTransferReceived(() => {
+      refreshTransferInfo();
+    });
+  }
+  if (window.api.onSharedFilesUpdated) {
+    window.api.onSharedFilesUpdated((files) => {
+      if (transferInfo) transferInfo.sharedFiles = files;
+      updateNotchSharedFiles(files);
+    });
+  }
+  if (window.api.onTransfersHistoryUpdated) {
+    window.api.onTransfersHistoryUpdated((hist) => {
+      if (transferInfo) transferInfo.history = hist;
+      renderTransferGallery();
+    });
+  }
+  if (window.api.onFocusTransferTab) {
+    window.api.onFocusTransferTab(() => {
+      isExpanded = true;
+      switchTab('transfer');
+      render();
+    });
+  }
+}
+
+refreshTransferInfo();
+

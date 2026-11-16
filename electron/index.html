@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: https: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
-  <title>Notcha 2.0.1</title>
+  <title>Notcha 3.0.0</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -64,6 +64,10 @@
             <button class="tab-btn" data-tab="clips" title="Clipboard History">
               <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
               <span>Clips</span>
+            </button>
+            <button class="tab-btn" data-tab="transfer" title="Cross-Platform File Transfer & Mini App">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Transfer</span>
             </button>
           </nav>
 
@@ -206,6 +210,32 @@
             <div class="media-container" id="mediaContainer">
               <!-- Dynamically rendered active playing media card or empty state -->
             </div>
+
+            <!-- Audio Output Device Routing Sheet -->
+            <div class="audio-route-sheet" id="audioRouteSheet" style="display: none;">
+              <div class="route-sheet-header">
+                <div class="route-sheet-title">
+                  <svg viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+                  <span>Audio Output Device</span>
+                </div>
+                <button class="route-sheet-close" id="routeSheetCloseBtn" title="Close (Esc)">&times;</button>
+              </div>
+              <div class="route-device-list" id="routeDeviceList"></div>
+            </div>
+
+            <!-- Multi-App Volume Mixer Sheet -->
+            <div class="volume-mixer-sheet" id="volumeMixerSheet" style="display: none;">
+              <div class="mixer-sheet-header">
+                <div class="mixer-sheet-title">
+                  <svg viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                  <span>Multi-App Volume Mixer</span>
+                </div>
+                <button class="route-sheet-close" id="mixerCloseBtn" title="Close (Esc)">&times;</button>
+              </div>
+              <div class="mixer-app-list" id="mixerAppList">
+                <!-- Dynamically populated app volume sliders -->
+              </div>
+            </div>
           </section>
 
           <!-- ================= 3. POWER PANEL ================= -->
@@ -323,6 +353,84 @@
             </div>
             <div class="clips-list" id="clipsList">
               <div class="empty-clips">No copied text yet. Copy anything and it will appear here!</div>
+            </div>
+          </section>
+
+          <!-- ================= 6. TRANSFER PANEL ================= -->
+          <section class="panel" id="panelTransfer">
+            <input type="file" id="filePickerNotch" multiple style="display: none;" />
+
+            <!-- Transfer Status Bar & Mini App Popout -->
+            <div class="transfer-bar">
+              <div class="transfer-status-tag" id="transferStatusTag" title="Wi-Fi Drop Status">
+                <span class="transfer-pulse"></span>
+                <span id="transferServerUrl">Wi-Fi Drop Active</span>
+              </div>
+
+              <div class="transfer-actions">
+                <button id="transferQrBtn" class="pill-mini-btn" title="Scan QR with Phone (iOS / Android)">
+                  <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h2v2h-2zM18 14h3v3h-3zM14 18h3v3h-3zM19 19h2v2h-2z"/></svg>
+                  <span>QR Pair</span>
+                </button>
+                <button id="transferPopoutBtn" class="pill-mini-btn highlight" title="Open Floating Mini App Window instead of Notch">
+                  <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  <span>Mini App</span>
+                </button>
+                <button id="transferFolderBtn" class="icon-btn" title="Open Transfers Folder in Finder">
+                  <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Main Dropzone -->
+            <div class="transfer-dropzone" id="notchDropzone">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <div class="dropzone-text">
+                <span class="dropzone-main">Drop files to share with phone or PCs</span>
+                <span class="dropzone-sub">or click to browse • Works with iOS, Android, macOS & Windows</span>
+              </div>
+            </div>
+
+            <!-- Active Sharing Notice -->
+            <div class="active-shared-banner" id="notchSharedBanner" style="display: none;">
+              <span id="notchSharedText">Sharing 1 file</span>
+              <button class="tag-btn" id="notchClearSharedBtn">Clear</button>
+            </div>
+
+            <!-- Gallery Albums & History -->
+            <div class="transfer-gallery-header">
+              <div class="gallery-albums">
+                <button class="album-btn active" data-album="all">All</button>
+                <button class="album-btn" data-album="images">Photos</button>
+                <button class="album-btn" data-album="videos">Videos</button>
+                <button class="album-btn" data-album="docs">Docs</button>
+                <button class="album-btn" data-album="archives">Archives</button>
+              </div>
+              <button class="tag-btn" id="notchClearHistoryBtn">Clear</button>
+            </div>
+
+            <!-- Gallery Grid/List -->
+            <div class="transfer-gallery-list" id="notchGalleryList">
+              <div class="empty-gallery">No transferred files yet. Drop files above or connect your phone!</div>
+            </div>
+
+            <!-- QR Sheet Overlay -->
+            <div class="transfer-qr-sheet" id="notchQrSheet">
+              <div class="qr-sheet-header">
+                <div class="qr-sheet-title">
+                  <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                  <span>Connect Mobile Device</span>
+                </div>
+                <button id="closeNotchQrBtn" class="icon-btn close-btn" title="Close QR">&times;</button>
+              </div>
+              <div class="qr-sheet-body">
+                <div class="qr-sheet-code" id="notchQrBox"></div>
+                <div class="qr-sheet-info">
+                  <p class="qr-sheet-tag">Scan with iPhone or Android Camera</p>
+                  <p class="qr-sheet-url" id="notchQrUrl">http://192.168.1.x:53317</p>
+                  <p class="qr-sheet-desc">Opens the instant transfer portal directly in Safari or Chrome. No mobile app installation required!</p>
+                </div>
+              </div>
             </div>
           </section>
 

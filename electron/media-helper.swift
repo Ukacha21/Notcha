@@ -96,6 +96,157 @@ func setSystemOutputVolume(_ vol: Int) -> Bool {
     return status2 == noErr
 }
 
+// MARK: - CoreAudio Output Device Routing
+struct AudioOutputDevice: Codable {
+    let id: UInt32
+    let uid: String
+    let name: String
+    let transport: String
+    let isDefault: Bool
+}
+
+func getAudioOutputDevices() -> [AudioOutputDevice] {
+    var defaultOutputDeviceID = AudioDeviceID(0)
+    var defaultSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+    var defaultAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioHardwarePropertyDefaultOutputDevice),
+        mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+    _ = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &defaultAddress, 0, nil, &defaultSize, &defaultOutputDeviceID)
+
+    var propAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioHardwarePropertyDevices),
+        mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+
+    var dataSize: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &propAddress, 0, nil, &dataSize) == noErr, dataSize > 0 else {
+        return []
+    }
+
+    let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+    var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
+    guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &propAddress, 0, nil, &dataSize, &deviceIDs) == noErr else {
+        return []
+    }
+
+    var result: [AudioOutputDevice] = []
+
+    for devID in deviceIDs {
+        var streamAddress = AudioObjectPropertyAddress(
+            mSelector: AudioObjectPropertySelector(kAudioDevicePropertyStreamConfiguration),
+            mScope: AudioObjectPropertyScope(kAudioDevicePropertyScopeOutput),
+            mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+        )
+        var streamSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(devID, &streamAddress, 0, nil, &streamSize) == noErr, streamSize > 0 else { continue }
+
+        let rawBuffer = UnsafeMutableRawPointer.allocate(byteCount: Int(streamSize), alignment: MemoryLayout<AudioBufferList>.alignment)
+        let getStreamStatus = AudioObjectGetPropertyData(devID, &streamAddress, 0, nil, &streamSize, rawBuffer)
+        if getStreamStatus != noErr {
+            rawBuffer.deallocate()
+            continue
+        }
+        let bufferList = rawBuffer.assumingMemoryBound(to: AudioBufferList.self).pointee
+        var totalChannels: UInt32 = 0
+        withUnsafePointer(to: bufferList.mBuffers) { ptr in
+            for i in 0..<Int(bufferList.mNumberBuffers) {
+                totalChannels += ptr.advanced(by: i).pointee.mNumberChannels
+            }
+        }
+        rawBuffer.deallocate()
+        guard totalChannels > 0 else { continue }
+
+        var unmanagedName: Unmanaged<CFString>? = nil
+        var nameSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        var nameAddress = AudioObjectPropertyAddress(
+            mSelector: AudioObjectPropertySelector(kAudioObjectPropertyName),
+            mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+            mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+        )
+        var deviceName = "Audio Output"
+        if AudioObjectGetPropertyData(devID, &nameAddress, 0, nil, &nameSize, &unmanagedName) == noErr,
+           let str = unmanagedName?.takeRetainedValue() as String? {
+            deviceName = str
+        }
+
+        var unmanagedUID: Unmanaged<CFString>? = nil
+        var uidSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        var uidAddress = AudioObjectPropertyAddress(
+            mSelector: AudioObjectPropertySelector(kAudioDevicePropertyDeviceUID),
+            mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+            mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+        )
+        var deviceUID = String(devID)
+        if AudioObjectGetPropertyData(devID, &uidAddress, 0, nil, &uidSize, &unmanagedUID) == noErr,
+           let str = unmanagedUID?.takeRetainedValue() as String? {
+            deviceUID = str
+        }
+
+        var transportAddress = AudioObjectPropertyAddress(
+            mSelector: AudioObjectPropertySelector(kAudioDevicePropertyTransportType),
+            mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+            mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+        )
+        var transportType: UInt32 = 0
+        var transportSize = UInt32(MemoryLayout<UInt32>.size)
+        _ = AudioObjectGetPropertyData(devID, &transportAddress, 0, nil, &transportSize, &transportType)
+
+        var kind = "speaker"
+        let lowerName = deviceName.lowercased()
+        if transportType == kAudioDeviceTransportTypeBluetooth || transportType == kAudioDeviceTransportTypeBluetoothLE || lowerName.contains("airpod") || lowerName.contains("beats") || lowerName.contains("bluetooth") {
+            kind = "bluetooth"
+        } else if transportType == kAudioDeviceTransportTypeUSB || lowerName.contains("usb") {
+            kind = "usb"
+        } else if transportType == kAudioDeviceTransportTypeDisplayPort || transportType == kAudioDeviceTransportTypeHDMI || lowerName.contains("display") || lowerName.contains("hdmi") || lowerName.contains("tv") {
+            kind = "display"
+        } else if transportType == kAudioDeviceTransportTypeAirPlay {
+            kind = "airplay"
+        } else if lowerName.contains("headphone") || lowerName.contains("earphone") {
+            kind = "headphones"
+        } else if transportType == kAudioDeviceTransportTypeBuiltIn {
+            kind = "builtin"
+        }
+
+        let isDefault = (devID == defaultOutputDeviceID)
+        result.append(AudioOutputDevice(id: UInt32(devID), uid: deviceUID, name: deviceName, transport: kind, isDefault: isDefault))
+    }
+
+    return result
+}
+
+func setDefaultAudioOutputDevice(idOrUID: String) -> Bool {
+    var targetID: AudioDeviceID? = nil
+    if let numeric = UInt32(idOrUID) {
+        targetID = numeric
+    } else {
+        let devices = getAudioOutputDevices()
+        if let match = devices.first(where: { $0.uid == idOrUID || $0.name == idOrUID }) {
+            targetID = match.id
+        }
+    }
+
+    guard var devID = targetID else { return false }
+    let size = UInt32(MemoryLayout<AudioDeviceID>.size)
+    var address = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioHardwarePropertyDefaultOutputDevice),
+        mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+    let s1 = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, size, &devID)
+
+    var sysAddress = AudioObjectPropertyAddress(
+        mSelector: AudioObjectPropertySelector(kAudioHardwarePropertyDefaultSystemOutputDevice),
+        mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+        mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
+    )
+    _ = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &sysAddress, 0, nil, size, &devID)
+
+    return s1 == noErr
+}
+
 // MARK: - Lock Screen
 func lockScreen() {
     if let login = loginHandle, let sym = dlsym(login, "SACLockScreenImmediate") {
@@ -295,6 +446,18 @@ if args.count > 1 {
     let cmd = args[1]
     if cmd == "lock" {
         lockScreen()
+    } else if cmd == "checkpermissions" || cmd == "permissions" {
+        let axOptions = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let ax = AXIsProcessTrustedWithOptions(axOptions)
+        var screen = true
+        if #available(macOS 10.15, *) {
+            screen = CGPreflightScreenCaptureAccess()
+            if !screen {
+                CGRequestScreenCaptureAccess()
+            }
+        }
+        print("{\"accessibility\":\(ax),\"screen\":\(screen)}")
+        fflush(stdout)
     } else if cmd == "getvolume" {
         print(getSystemOutputVolume())
         fflush(stdout)
@@ -302,6 +465,25 @@ if args.count > 1 {
         let v = args.count > 2 ? Int(args[2]) ?? 50 : 50
         _ = setSystemOutputVolume(v)
         print("OK")
+        fflush(stdout)
+    } else if cmd == "getaudiodevices" || cmd == "devices" {
+        let devs = getAudioOutputDevices()
+        if let data = try? JSONSerialization.data(withJSONObject: devs.map { [
+            "id": $0.id,
+            "uid": $0.uid,
+            "name": $0.name,
+            "transport": $0.transport,
+            "isDefault": $0.isDefault
+        ] }, options: []), let str = String(data: data, encoding: .utf8) {
+            print(str)
+        } else {
+            print("[]")
+        }
+        fflush(stdout)
+    } else if cmd == "setaudiodevice" || cmd == "setdevice" {
+        let target = args.count > 2 ? args[2] : ""
+        let ok = setDefaultAudioOutputDevice(idOrUID: target)
+        print(ok ? "OK" : "ERROR")
         fflush(stdout)
     } else if cmd == "nowplaying" {
         getNowPlaying()
