@@ -951,6 +951,178 @@ ipcMain.handle('set-audio-device', async (_e, deviceId) => {
   return false;
 });
 
+// ---------- Multi-App Volume Mixer ----------
+const appVolumeStore = {
+  spotify: 75,
+  'apple-music': 75,
+  vlc: 80,
+  quicktime: 80,
+  chrome: 100,
+  brave: 100,
+  safari: 100,
+  arc: 100,
+  telegram: 100,
+  discord: 100,
+};
+const appMuteStore = {};
+
+async function queryRunningAudioApps() {
+  const isMac = process.platform === 'darwin';
+  const apps = [
+    {
+      id: 'system',
+      name: 'Master Output',
+      icon: 'speaker',
+      volume: cachedSystemVolume,
+      isMuted: cachedSystemVolume === 0,
+      isMaster: true,
+    },
+  ];
+
+  if (!isMac) return apps;
+
+  return new Promise((resolve) => {
+    const script = `
+      set appList to ""
+      if application "Spotify" is running then
+        tell application "Spotify" to set v to sound volume
+        set appList to appList & "spotify:Spotify:" & v & ";"
+      end if
+      if application "Music" is running then
+        tell application "Music" to set v to sound volume
+        set appList to appList & "apple-music:Apple Music:" & v & ";"
+      end if
+      if application "QuickTime Player" is running then
+        set appList to appList & "quicktime:QuickTime Player:80;"
+      end if
+      if application "VLC" is running then
+        set appList to appList & "vlc:VLC:80;"
+      end if
+      if application "Google Chrome" is running then
+        set appList to appList & "chrome:Google Chrome:100;"
+      end if
+      if application "Brave Browser" is running then
+        set appList to appList & "brave:Brave Browser:100;"
+      end if
+      if application "Safari" is running then
+        set appList to appList & "safari:Safari:100;"
+      end if
+      if application "Arc" is running then
+        set appList to appList & "arc:Arc:100;"
+      end if
+      if application "Telegram" is running then
+        set appList to appList & "telegram:Telegram:100;"
+      end if
+      if application "Discord" is running then
+        set appList to appList & "discord:Discord:100;"
+      end if
+      return appList
+    `;
+
+    execFile('osascript', ['-e', script], (err, stdout) => {
+      if (!err && stdout) {
+        const entries = stdout.trim().split(';').filter(Boolean);
+        for (const entry of entries) {
+          const parts = entry.split(':');
+          const id = parts[0];
+          const name = parts[1];
+          const volStr = parts[2];
+          if (id && name) {
+            const vol = parseInt(volStr, 10);
+            const volume = Number.isFinite(vol) ? vol : (appVolumeStore[id] || 80);
+            appVolumeStore[id] = volume;
+            apps.push({
+              id,
+              name,
+              icon: id,
+              volume: appMuteStore[id] ? 0 : volume,
+              savedVolume: volume,
+              isMuted: !!appMuteStore[id],
+              isMaster: false,
+            });
+          }
+        }
+      }
+
+      if (apps.length === 1) {
+        ['spotify', 'apple-music'].forEach((id) => {
+          const name = id === 'spotify' ? 'Spotify' : 'Apple Music';
+          const vol = appVolumeStore[id] || 75;
+          apps.push({
+            id,
+            name,
+            icon: id,
+            volume: appMuteStore[id] ? 0 : vol,
+            savedVolume: vol,
+            isMuted: !!appMuteStore[id],
+            isMaster: false,
+            isInactive: true,
+          });
+        });
+      }
+
+      resolve(apps);
+    });
+  });
+}
+
+ipcMain.handle('get-app-volumes', async () => {
+  return await queryRunningAudioApps();
+});
+
+ipcMain.on('set-app-volume', (_e, { id, volume }) => {
+  const v = Math.max(0, Math.min(100, Math.round(volume)));
+  appVolumeStore[id] = v;
+  delete appMuteStore[id];
+
+  if (id === 'system') {
+    cachedSystemVolume = v;
+    if (process.platform === 'darwin') {
+      execFile(mediaHelperPath, ['volume', String(v)], (err) => {
+        if (err) runAppleScript(`set volume output volume ${v}`);
+      });
+    }
+  } else if (id === 'spotify') {
+    runAppleScript(`if application "Spotify" is running then tell application "Spotify" to set sound volume to ${v}`);
+  } else if (id === 'apple-music' || id === 'music') {
+    runAppleScript(`if application "Music" is running then tell application "Music" to set sound volume to ${v}`);
+  } else if (id === 'vlc') {
+    runAppleScript(`if application "VLC" is running then tell application "VLC" to set volume to ${Math.round(v * 2.56)}`);
+  } else if (id === 'quicktime') {
+    runAppleScript(`if application "QuickTime Player" is running then tell application "QuickTime Player" to set audio volume of document 1 to ${v / 100}`);
+  }
+});
+
+ipcMain.handle('toggle-app-mute', async (_e, id) => {
+  if (!id) return false;
+  if (id === 'system') {
+    if (cachedSystemVolume > 0) {
+      appMuteStore['system'] = cachedSystemVolume;
+      cachedSystemVolume = 0;
+      execFile(mediaHelperPath, ['volume', '0']);
+    } else {
+      const restore = appMuteStore['system'] || 50;
+      delete appMuteStore['system'];
+      cachedSystemVolume = restore;
+      execFile(mediaHelperPath, ['volume', String(restore)]);
+    }
+    return cachedSystemVolume === 0;
+  }
+
+  if (appMuteStore[id]) {
+    const restore = appMuteStore[id];
+    delete appMuteStore[id];
+    if (id === 'spotify') runAppleScript(`if application "Spotify" is running then tell application "Spotify" to set sound volume to ${restore}`);
+    else if (id === 'apple-music') runAppleScript(`if application "Music" is running then tell application "Music" to set sound volume to ${restore}`);
+    return false;
+  } else {
+    appMuteStore[id] = appVolumeStore[id] || 75;
+    if (id === 'spotify') runAppleScript(`if application "Spotify" is running then tell application "Spotify" to set sound volume to 0`);
+    else if (id === 'apple-music') runAppleScript(`if application "Music" is running then tell application "Music" to set sound volume to 0`);
+    return true;
+  }
+});
+
 // Clipboard
 ipcMain.handle('get-clipboard-history', () => clipboardHistory);
 ipcMain.on('copy-clipboard-text', (_e, text) => {

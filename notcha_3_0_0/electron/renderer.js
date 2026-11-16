@@ -121,6 +121,7 @@ function switchTab(tabName) {
     refreshAudioDevices();
   } else {
     closeAudioRouteSheet();
+    closeVolumeMixerSheet();
   }
   if (tabName === 'transfer') {
     refreshTransferInfo();
@@ -696,6 +697,128 @@ function closeAudioRouteSheet() {
   audioRouteSheet.style.display = 'none';
 }
 
+// ---------- Multi-App Volume Mixer Controller ----------
+const volumeMixerSheet = $('volumeMixerSheet');
+const mixerAppList = $('mixerAppList');
+const mixerCloseBtn = $('mixerCloseBtn');
+
+function openVolumeMixerSheet() {
+  if (!volumeMixerSheet) return;
+  volumeMixerSheet.style.display = 'flex';
+  refreshVolumeMixer();
+}
+
+function closeVolumeMixerSheet() {
+  if (!volumeMixerSheet) return;
+  volumeMixerSheet.style.display = 'none';
+}
+
+if (mixerCloseBtn) {
+  mixerCloseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeVolumeMixerSheet();
+  });
+}
+
+function getAppMixerIconSvg(iconId) {
+  switch (iconId) {
+    case 'spotify':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#10b981;"><circle cx="12" cy="12" r="10"/><path d="M8 11.5c3.5-1 6.5-.5 9 1M8.5 14.5c2.5-.7 5-.3 7 .7M9 17.5c2-.5 4-.2 5.5.5" stroke="#fff" stroke-width="1.5" fill="none"/></svg>';
+    case 'apple-music':
+    case 'music':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#f43f5e;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+    case 'vlc':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#f59e0b;"><path d="M12 2L4 20h16L12 2z"/></svg>';
+    case 'chrome':
+    case 'brave':
+    case 'safari':
+    case 'arc':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#38bdf8;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+    case 'telegram':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#38bdf8;"><path d="M21.5 2L2 9.5l7 3 2.5 7.5L15 15l6.5 5L21.5 2z"/></svg>';
+    case 'discord':
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#818cf8;"><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><path d="M7 6h10c2 2 3 6 2 11-2 1.5-4 1.5-5 1l-1-1-1 1c-1 .5-3 .5-5-1-1-5 0-9 2-11z"/></svg>';
+    default:
+      return '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:#38bdf8;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+  }
+}
+
+async function refreshVolumeMixer() {
+  if (!mixerAppList || !window.api || !window.api.getAppVolumes) return;
+  try {
+    const apps = await window.api.getAppVolumes();
+    if (!Array.isArray(apps) || apps.length === 0) {
+      mixerAppList.innerHTML = '<div style="font-size:11px;color:var(--text-mute);text-align:center;padding:16px;">No audio sessions detected.</div>';
+      return;
+    }
+
+    mixerAppList.innerHTML = '';
+    apps.forEach((app) => {
+      const row = document.createElement('div');
+      row.className = `mixer-row ${app.isMaster ? 'master' : ''}`;
+      const iconSvg = getAppMixerIconSvg(app.icon);
+      const isMuted = !!app.isMuted || app.volume === 0;
+
+      row.innerHTML = `
+        <div class="mixer-app-badge">
+          <span class="mixer-icon-wrap">${iconSvg}</span>
+          <span class="mixer-app-label" title="${escapeHtml(app.name)}">${escapeHtml(app.name)}</span>
+        </div>
+        <div class="mixer-slider-wrap">
+          <div class="mixer-slider-container">
+            <input type="range" class="mixer-slider" min="0" max="100" value="${app.volume}" />
+          </div>
+          <span class="mixer-pct">${app.volume}%</span>
+          <button class="mixer-mute-btn ${isMuted ? 'muted' : ''}" title="${isMuted ? 'Unmute' : 'Mute'}">
+            ${isMuted
+              ? '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
+              : '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
+            }
+          </button>
+        </div>
+      `;
+
+      const slider = row.querySelector('.mixer-slider');
+      const pctEl = row.querySelector('.mixer-pct');
+      const muteBtn = row.querySelector('.mixer-mute-btn');
+
+      if (slider && pctEl) {
+        slider.addEventListener('input', (e) => {
+          e.stopPropagation();
+          const val = parseInt(slider.value, 10);
+          pctEl.textContent = `${val}%`;
+          if (window.api && window.api.setAppVolume) {
+            window.api.setAppVolume({ id: app.id, volume: val });
+          }
+          if (app.isMaster) {
+            cachedSystemVolume = val;
+            const mainVol = document.querySelector('.card-vol');
+            const mainFill = document.querySelector('.volume-row .slider-fill');
+            const mainNum = document.querySelector('.vol-num');
+            if (mainVol) mainVol.value = val;
+            if (mainFill) mainFill.style.width = `${val}%`;
+            if (mainNum) mainNum.textContent = `${val}%`;
+          }
+        });
+      }
+
+      if (muteBtn) {
+        muteBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (window.api && window.api.toggleAppMute) {
+            await window.api.toggleAppMute(app.id);
+            refreshVolumeMixer();
+          }
+        });
+      }
+
+      mixerAppList.appendChild(row);
+    });
+  } catch (err) {
+    console.error('refreshVolumeMixer error:', err);
+  }
+}
+
 function renderActiveMedia() {
   if (!mediaContainer) return;
 
@@ -708,11 +831,14 @@ function renderActiveMedia() {
         <div class="empty-title">No Media Playing</div>
         <div class="empty-subtitle">Play audio in Spotify, Apple Music, YouTube, VLC or your browser to control it here.</div>
         <div class="empty-route-section">
-          <span class="empty-route-label">Current Audio Output:</span>
           <button class="audio-output-pill empty-output-pill" id="emptyAudioOutputBtn" title="Switch Audio Output Device" type="button">
             <span class="route-pill-icon">${getDeviceIconSvg(currentOutputDevice ? currentOutputDevice.transport : 'speaker')}</span>
             <span class="route-pill-name">${escapeHtml(currentOutputDevice ? currentOutputDevice.name : 'Audio Output')}</span>
             <svg class="route-pill-arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <button class="audio-output-pill empty-output-pill" id="emptyMixerBtn" title="Open Multi-App Volume Mixer" type="button">
+            <span class="route-pill-icon"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/></svg></span>
+            <span class="route-pill-name">Volume Mixer</span>
           </button>
         </div>
       </div>
@@ -722,6 +848,13 @@ function renderActiveMedia() {
       emptyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         openAudioRouteSheet();
+      });
+    }
+    const emptyMixerBtn = mediaContainer.querySelector('#emptyMixerBtn');
+    if (emptyMixerBtn) {
+      emptyMixerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openVolumeMixerSheet();
       });
     }
     updateCompactCompanion();
@@ -830,6 +963,10 @@ function renderActiveMedia() {
               <span class="route-pill-name">${escapeHtml(currentOutputDevice ? currentOutputDevice.name : 'Audio Output')}</span>
               <svg class="route-pill-arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
+            <button class="audio-output-pill" id="activeMixerBtn" title="Open Multi-App Volume Mixer" type="button">
+              <span class="route-pill-icon"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/></svg></span>
+              <span class="route-pill-name">Mixer</span>
+            </button>
             <div class="status-pill ${isPlaying ? 'playing' : ''}">
               ${isPlaying ? '<span class="status-pulse-dot"></span> Active' : '⏸ Paused'}
             </div>
@@ -892,6 +1029,14 @@ function renderActiveMedia() {
       routeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         openAudioRouteSheet();
+      });
+    }
+
+    const mixerBtn = card.querySelector('#activeMixerBtn');
+    if (mixerBtn) {
+      mixerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openVolumeMixerSheet();
       });
     }
 
@@ -1108,6 +1253,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hidePowerConfirmation();
     closeAudioRouteSheet();
+    closeVolumeMixerSheet();
     closeTransferQrSheet();
   }
 });

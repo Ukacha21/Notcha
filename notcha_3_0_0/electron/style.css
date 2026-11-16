@@ -972,6 +972,183 @@ html, body {
   display: block;
 }
 
+/* ==========================================
+   MULTI-APP VOLUME MIXER SHEET
+   ========================================== */
+.volume-mixer-sheet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(13, 12, 18, 0.97);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-radius: 14px;
+  z-index: 35;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 0 1px var(--border);
+  animation: routeSheetIn 0.2s var(--spring);
+}
+
+.mixer-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.mixer-sheet-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.1px;
+}
+.mixer-sheet-title svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 2;
+}
+
+.mixer-app-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 2px;
+}
+.mixer-app-list::-webkit-scrollbar { width: 3px; }
+.mixer-app-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 2px; }
+
+.mixer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 5px 8px;
+  transition: all 0.15s ease;
+}
+.mixer-row:hover {
+  background: var(--surface-hover);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.mixer-row.master {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.25);
+}
+
+.mixer-app-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 130px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.mixer-icon-wrap {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.mixer-icon-wrap svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+.mixer-app-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mixer-slider-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mixer-slider-container {
+  position: relative;
+  flex: 1;
+  height: 14px;
+  display: flex;
+  align-items: center;
+}
+.mixer-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.12);
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.mixer-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.mixer-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--accent);
+}
+.mixer-pct {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.mixer-mute-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 3px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+.mixer-mute-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.mixer-mute-btn.muted {
+  color: var(--danger);
+}
+.mixer-mute-btn svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
 /* Empty State (when no player is currently active) */
 .media-empty-card {
   flex: 1;

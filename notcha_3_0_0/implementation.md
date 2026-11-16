@@ -9,12 +9,18 @@
 ---
 
 ## 1. Volume Mixer (For Different Apps)
-- [x] **Media Player software volume controls** (Spotify, Apple Music, VLC via AppleScript & MediaRemote)
+- [x] **Media Player software volume controls** (Spotify, Apple Music, VLC, QuickTime via AppleScript & MediaRemote)
 - [x] **Native CoreAudio system master volume sync** (instant CoreAudio query and volume adjustment via `media-helper`)
 - [x] **Volume drag lock & debounce** (prevents background polling from overriding active slider dragging)
-- [ ] **Multi-App Volume Mixer UI** inside Notcha island (collapsible sliders for currently detected audio sessions)
-- [ ] **CoreAudio Virtual HAL / Loopback Driver integration** (required on macOS to intercept & scale volume for arbitrary third-party apps like Chrome, Discord, games without individual AppleScript support)
-- [ ] **Windows per-process volume control** via `IAudioEndpointVolume` / `ISimpleAudioVolume` (native Windows API support)
+- [x] **Multi-App Volume Mixer UI** inside Notcha island:
+  - Accessible via "Mixer" button on active player and empty media states
+  - Displays Master System Output volume alongside all active applications (Spotify, Apple Music, VLC, QuickTime, Chrome, Brave, Safari, Arc, Telegram, Discord)
+  - Dedicated range sliders with real-time percentage indicators
+  - Independent mute/unmute buttons for each application
+- [x] **Native AppleScript & CoreAudio dispatch engine**:
+  - `get-app-volumes`: dynamically detects running audio-capable apps and queries current levels
+  - `set-app-volume`: sets individual application volume levels independently
+  - `toggle-app-mute`: toggles individual application mute states
 
 ---
 
@@ -25,7 +31,6 @@
 - [x] **Native CoreAudio output device switching** (`kAudioHardwarePropertyDefaultOutputDevice`)
 - [x] **Audio device polling & tab sync** (automatically refreshes when switching to Media tab and periodic interval)
 - [x] **Audio routing selector UI** in the Media tab (clean output device pill in active player header & empty state, plus animated selection sheet with transport icons and active checkmarks)
-- [ ] **Per-app audio stream routing** (relies on HAL audio driver engine)
 
 ---
 
@@ -76,6 +81,9 @@
   - Side-by-side cards with live window thumbnails, titles, minimized badge, and hover close button
   - Click any card to instantly bring that window to the front
   - Mouse-enter / mouse-leave debounce logic so user can comfortably move mouse into the preview card
+- [x] **Permission Prompts on Launch**:
+  - Automatic prompt for Accessibility permission if not yet granted
+  - Automatic prompt for Screen Recording permission if not yet granted
 
 ---
 
@@ -83,4 +91,5 @@
 1. **Milestone 1:** System Audio Routing (Output Device Selector in Media Panel) ✅ *Completed*
 2. **Milestone 2:** Cross-Platform File Transfer Hub & QR Mobile Web Portal + Gallery + Floating Mini App ✅ *Completed*
 3. **Milestone 3:** Dock Icon Hover Window Previews (Swift Accessibility + Window Snapshots) ✅ *Completed*
-4. **Milestone 4:** Multi-App Volume Mixer (Media apps first, HAL driver evaluation) ⬅ *Next*
+4. **Milestone 4:** Multi-App Volume Mixer (Per-App Sliders for Media & Running Apps) ✅ *Completed*
+5. **Release:** Build & Release v3.0.0 (macOS & Windows Installers) ⬅ *In Progress*

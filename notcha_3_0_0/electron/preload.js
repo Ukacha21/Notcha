@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld('api', {
   getAudioDevices: () => ipcRenderer.invoke('get-audio-devices'),
   setAudioDevice: (id) => ipcRenderer.invoke('set-audio-device', id),
 
+  // Multi-App Volume Mixer
+  getAppVolumes: () => ipcRenderer.invoke('get-app-volumes'),
+  setAppVolume: (payload) => ipcRenderer.send('set-app-volume', payload),
+  toggleAppMute: (id) => ipcRenderer.invoke('toggle-app-mute', id),
+
   // Clipboard
   getClipboardHistory: () => ipcRenderer.invoke('get-clipboard-history'),
   copyClipboardText: (text) => ipcRenderer.send('copy-clipboard-text', text),
