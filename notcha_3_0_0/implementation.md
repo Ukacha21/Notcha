@@ -29,7 +29,36 @@
 
 ---
 
-## 3. Hover on Dock Icons for Window Previews
+## 3. Cross-Platform File Transfer, Albums Gallery & Mini App (Mac, Windows, iOS, Android)
+- [x] **High-Speed HTTP Streaming Engine** (`transfer-server.js`):
+  - Local Wi-Fi transfer server on port `53317` with automatic port fallback
+  - Streaming file transfers with zero file size limits (`fs.createReadStream` / `fs.createWriteStream`)
+  - Auto-created downloads directory at `~/Downloads/Notcha Transfers`
+  - History persistence in JSON format with automatic timestamping and file metadata
+- [x] **Zero-Install Mobile Web Portal** (iOS Safari & Android Chrome):
+  - Pure JavaScript SVG QR code generator (`qr-generator.js`, QR Model 2 Version 4-M with Reed-Solomon ECC, zero external npm dependencies)
+  - Mobile web app served directly to connecting phones over Wi-Fi
+  - Mobile upload portal with camera/gallery photo picker and chunked binary upload
+  - Mobile download portal showing active files shared from Mac
+- [x] **Top Notch "Transfer" Tab**:
+  - Tab button named **"Transfer"** in Notcha island header
+  - Server status indicator with local Wi-Fi IP / URL
+  - Drag-and-drop drop zone on the island (also supports clicking to open native macOS file picker)
+  - Active shared files notice with "Clear" action
+  - 1-click QR pair overlay sheet
+  - Direct Finder folder shortcut button
+- [x] **Optional Floating Mini App Window** (`mini-transfer.html` & `mini-transfer.js`):
+  - Frameless, translucent, draggable floating mini window (360x480)
+  - Provides users the choice to either drag files to the top notch OR open the floating mini app
+  - Contains drop zone, QR code button, active shared indicator, recent transfers list, and "Dock Notch" return button
+- [x] **Past Transfers Gallery with Albums**:
+  - Filter by album categories: **All**, **Photos** (images), **Videos**, **Docs**, and **Archives**
+  - Displays transfer direction (📥 Received / 📤 Sent), file size, timestamp, and device source
+  - 1-click "Show in Finder" action
+
+---
+
+## 4. Hover on Dock Icons for Window Previews
 - [ ] **Native Swift Dock Tracker** (`dock-tracker.swift`):
   - Request & verify macOS **Accessibility** (`AXUIElement`) and **Screen Recording** permissions
   - Track global mouse coordinates when entering the macOS Dock bounds (`com.apple.dock`)
@@ -44,27 +73,8 @@
 
 ---
 
-## 4. Cross-Platform File Transfer & Gallery (Mac, Windows, iOS, Android)
-- [ ] **Local Discovery & Transfer Engine**:
-  - Local **mDNS / Bonjour** service (`_notcha-share._tcp`) for zero-config discovery across devices on the same Wi-Fi
-  - Local HTTP + WebSocket transfer server on Notcha (secure PIN / paired authorization)
-  - Chunked file streaming for high-speed local transfer without file size limits
-- [ ] **Zero-Install Mobile Web Portal** (iOS & Android):
-  - In-island QR code generator (`http://<mac-ip>:<port>`)
-  - Mobile web UI for Safari / Chrome to select photos/files and send directly to Notcha (and download files sent from Mac) without requiring an App Store download
-- [ ] **Dynamic Island File Transfer Tab**:
-  - Drag-and-drop file drop zone on the island
-  - Device pairing list ("This Device", "Discovered Devices")
-  - Progress ring / transfer speed indicator
-- [ ] **Past Transfers Gallery**:
-  - Persistent SQLite / JSON metadata store of transferred files
-  - Album categories (Images, Videos, Documents, Archives)
-  - Grid preview thumbnails with 1-click reveal in Finder/Explorer
-
----
-
 ## Implementation Sequence
-1. **Milestone 1:** System Audio Routing (Output Device Selector in Media Panel) ⬅ *Starting here*
-2. **Milestone 2:** Cross-Platform File Transfer Hub & QR Mobile Web Portal + Gallery
-3. **Milestone 3:** Dock Icon Hover Window Previews (Swift Accessibility + ScreenCapture)
+1. **Milestone 1:** System Audio Routing (Output Device Selector in Media Panel) ✅ *Completed*
+2. **Milestone 2:** Cross-Platform File Transfer Hub & QR Mobile Web Portal + Gallery + Floating Mini App ✅ *Completed*
+3. **Milestone 3:** Dock Icon Hover Window Previews (Swift Accessibility + ScreenCapture) ⬅ *Next*
 4. **Milestone 4:** Multi-App Volume Mixer (Media apps first, HAL driver evaluation)

@@ -31,7 +31,11 @@
       "renderer.js",
       "logo.png",
       "media-helper",
-      "nowplaying-query.swift"
+      "nowplaying-query.swift",
+      "qr-generator.js",
+      "transfer-server.js",
+      "mini-transfer.html",
+      "mini-transfer.js"
     ],
     "asarUnpack": [
       "media-helper",

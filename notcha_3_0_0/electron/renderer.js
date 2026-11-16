@@ -122,6 +122,11 @@ function switchTab(tabName) {
   } else {
     closeAudioRouteSheet();
   }
+  if (tabName === 'transfer') {
+    refreshTransferInfo();
+  } else {
+    closeTransferQrSheet();
+  }
 }
 
 tabBtns.forEach((btn) => {
@@ -1103,6 +1108,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hidePowerConfirmation();
     closeAudioRouteSheet();
+    closeTransferQrSheet();
   }
 });
 
@@ -1276,3 +1282,285 @@ setInterval(() => {
     refreshAudioDevices();
   }
 }, 4000);
+
+// ==========================================
+// 12. TRANSFER TAB & FLOATING MINI APP
+// ==========================================
+const transferServerUrl = document.getElementById('transferServerUrl');
+const transferQrBtn = document.getElementById('transferQrBtn');
+const transferPopoutBtn = document.getElementById('transferPopoutBtn');
+const transferFolderBtn = document.getElementById('transferFolderBtn');
+const filePickerNotch = document.getElementById('filePickerNotch');
+const notchDropzone = document.getElementById('notchDropzone');
+const notchSharedBanner = document.getElementById('notchSharedBanner');
+const notchSharedText = document.getElementById('notchSharedText');
+const notchClearSharedBtn = document.getElementById('notchClearSharedBtn');
+const albumBtns = document.querySelectorAll('.album-btn');
+const notchClearHistoryBtn = document.getElementById('notchClearHistoryBtn');
+const notchGalleryList = document.getElementById('notchGalleryList');
+const notchQrSheet = document.getElementById('notchQrSheet');
+const notchQrBox = document.getElementById('notchQrBox');
+const notchQrUrl = document.getElementById('notchQrUrl');
+const closeNotchQrBtn = document.getElementById('closeNotchQrBtn');
+
+let transferInfo = null;
+let activeAlbum = 'all';
+
+async function refreshTransferInfo() {
+  if (!window.api || !window.api.getTransferServerInfo) return;
+  try {
+    transferInfo = await window.api.getTransferServerInfo();
+    if (!transferInfo) return;
+
+    if (transferServerUrl) {
+      transferServerUrl.textContent = transferInfo.url ? transferInfo.url.replace(/^http:\/\//, '') : 'Wi-Fi Drop Active';
+    }
+    if (notchQrUrl) {
+      notchQrUrl.textContent = transferInfo.url || '';
+    }
+    if (notchQrBox && transferInfo.qrSvg) {
+      notchQrBox.innerHTML = transferInfo.qrSvg;
+    }
+
+    updateNotchSharedFiles(transferInfo.sharedFiles || []);
+    renderTransferGallery();
+  } catch (err) {
+    console.error('Failed to refresh transfer info:', err);
+  }
+}
+
+function updateNotchSharedFiles(files) {
+  if (!notchSharedBanner || !notchSharedText) return;
+  if (!files || files.length === 0) {
+    notchSharedBanner.style.display = 'none';
+    return;
+  }
+  notchSharedBanner.style.display = 'flex';
+  if (files.length === 1) {
+    notchSharedText.textContent = `Sharing "${files[0].name}" (${files[0].formattedSize})`;
+  } else {
+    notchSharedText.textContent = `Sharing ${files.length} files to paired devices`;
+  }
+}
+
+function getFileCategoryIcon(type) {
+  switch (type) {
+    case 'images': return '🖼️';
+    case 'videos': return '🎬';
+    case 'docs': return '📄';
+    case 'archives': return '📦';
+    default: return '📁';
+  }
+}
+
+function formatTransferTime(timestamp) {
+  if (!timestamp) return '';
+  const d = new Date(timestamp);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function renderTransferGallery() {
+  if (!notchGalleryList) return;
+  const list = (transferInfo && transferInfo.history) ? transferInfo.history : [];
+  const filtered = activeAlbum === 'all' ? list : list.filter((item) => item.type === activeAlbum);
+
+  if (filtered.length === 0) {
+    notchGalleryList.innerHTML = '<div class="empty-gallery">No files in this album yet. Drop files above or connect your phone!</div>';
+    return;
+  }
+
+  notchGalleryList.innerHTML = '';
+  filtered.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'gallery-row';
+
+    const icon = getFileCategoryIcon(item.type);
+    const dirText = item.direction === 'received' ? '📥 Recv' : '📤 Sent';
+    const device = item.device ? ` • ${item.device}` : '';
+
+    row.innerHTML = `
+      <div class="gallery-thumb">${icon}</div>
+      <div class="gallery-info">
+        <div class="gallery-name" title="${item.name}">${item.name}</div>
+        <div class="gallery-meta">${dirText} • ${item.formattedSize || ''} • ${formatTransferTime(item.time)}${device}</div>
+      </div>
+      <button class="gallery-reveal" title="Show in Finder">
+        <svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
+      </button>
+    `;
+
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.gallery-reveal')) return;
+      if (window.api && window.api.showItemInFolder && item.path) {
+        window.api.showItemInFolder(item.path);
+      }
+    });
+
+    const revealBtn = row.querySelector('.gallery-reveal');
+    if (revealBtn) {
+      revealBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.api && window.api.showItemInFolder && item.path) {
+          window.api.showItemInFolder(item.path);
+        }
+      });
+    }
+
+    notchGalleryList.appendChild(row);
+  });
+}
+
+function openTransferQrSheet() {
+  if (notchQrSheet) notchQrSheet.classList.add('active');
+}
+function closeTransferQrSheet() {
+  if (notchQrSheet) notchQrSheet.classList.remove('active');
+}
+
+// QR toggle
+if (transferQrBtn) {
+  transferQrBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (notchQrSheet && notchQrSheet.classList.contains('active')) {
+      closeTransferQrSheet();
+    } else {
+      openTransferQrSheet();
+    }
+  });
+}
+if (closeNotchQrBtn) {
+  closeNotchQrBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeTransferQrSheet();
+  });
+}
+
+// Popout Mini App button
+if (transferPopoutBtn) {
+  transferPopoutBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.openMiniTransfer) {
+      window.api.openMiniTransfer();
+    }
+  });
+}
+
+// Open folder
+if (transferFolderBtn) {
+  transferFolderBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.openTransfersFolder) {
+      window.api.openTransfersFolder();
+    }
+  });
+}
+
+// Album buttons
+albumBtns.forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    activeAlbum = btn.dataset.album || 'all';
+    albumBtns.forEach((b) => b.classList.toggle('active', b === btn));
+    renderTransferGallery();
+  });
+});
+
+// Dropzone Drag & Drop
+if (notchDropzone) {
+  notchDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    notchDropzone.classList.add('dragover');
+  });
+
+  notchDropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    notchDropzone.classList.remove('dragover');
+  });
+
+  notchDropzone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    notchDropzone.classList.remove('dragover');
+
+    const files = Array.from(e.dataTransfer.files || []);
+    const paths = files.map((f) => f.path).filter(Boolean);
+    if (paths.length > 0 && window.api && window.api.shareFiles) {
+      await window.api.shareFiles(paths);
+      refreshTransferInfo();
+    }
+  });
+
+  notchDropzone.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.chooseFilesToShare) {
+      await window.api.chooseFilesToShare();
+      refreshTransferInfo();
+    } else if (filePickerNotch) {
+      filePickerNotch.click();
+    }
+  });
+}
+
+if (filePickerNotch) {
+  filePickerNotch.addEventListener('change', async () => {
+    const files = Array.from(filePickerNotch.files || []);
+    const paths = files.map((f) => f.path).filter(Boolean);
+    if (paths.length > 0 && window.api && window.api.shareFiles) {
+      await window.api.shareFiles(paths);
+      refreshTransferInfo();
+    }
+    filePickerNotch.value = '';
+  });
+}
+
+// Clear buttons
+if (notchClearSharedBtn) {
+  notchClearSharedBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.clearSharedFiles) {
+      await window.api.clearSharedFiles();
+    }
+  });
+}
+
+if (notchClearHistoryBtn) {
+  notchClearHistoryBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.clearTransfersHistory) {
+      await window.api.clearTransfersHistory();
+    }
+  });
+}
+
+// Wire transfer IPC listeners
+if (window.api) {
+  if (window.api.onTransferReceived) {
+    window.api.onTransferReceived(() => {
+      refreshTransferInfo();
+    });
+  }
+  if (window.api.onSharedFilesUpdated) {
+    window.api.onSharedFilesUpdated((files) => {
+      if (transferInfo) transferInfo.sharedFiles = files;
+      updateNotchSharedFiles(files);
+    });
+  }
+  if (window.api.onTransfersHistoryUpdated) {
+    window.api.onTransfersHistoryUpdated((hist) => {
+      if (transferInfo) transferInfo.history = hist;
+      renderTransferGallery();
+    });
+  }
+  if (window.api.onFocusTransferTab) {
+    window.api.onFocusTransferTab(() => {
+      isExpanded = true;
+      switchTab('transfer');
+      render();
+    });
+  }
+}
+
+refreshTransferInfo();
+

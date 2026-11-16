@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, clipboard, dialog } = require('electron');
 const path = require('path');
 const { exec, execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const TransferServer = require('./transfer-server');
 
 // Canvas dimensions: large enough to fit expanded island tabs without clipping.
 const W = 640;
@@ -56,6 +57,71 @@ function createWindow() {
     place();
     win.showInactive();
     if (process.platform === 'darwin') app.dock.hide();
+  });
+}
+
+// ---------- Transfer Server & Mini App ----------
+let transferServer = null;
+let miniWin = null;
+
+function broadcastTransferEvent(channel, data) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send(channel, data);
+  }
+  if (miniWin && !miniWin.isDestroyed()) {
+    miniWin.webContents.send(channel, data);
+  }
+}
+
+function initTransferServer() {
+  transferServer = new TransferServer({
+    onTransferReceived: (item) => {
+      broadcastTransferEvent('transfer-received', item);
+      broadcastTransferEvent('transfers-history-updated', transferServer.history);
+    },
+  });
+  transferServer.start().catch((err) => {
+    console.error('Failed to start transfer server:', err);
+  });
+}
+
+function createMiniTransferWindow() {
+  if (miniWin && !miniWin.isDestroyed()) {
+    miniWin.show();
+    miniWin.focus();
+    return;
+  }
+  const display = screen.getPrimaryDisplay();
+  const { width, height } = display.workAreaSize;
+  const miniW = 360;
+  const miniH = 480;
+
+  miniWin = new BrowserWindow({
+    width: miniW,
+    height: miniH,
+    x: Math.round((width - miniW) / 2),
+    y: Math.round((height - miniH) / 2),
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: true,
+    minWidth: 320,
+    minHeight: 400,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    hasShadow: true,
+    icon: path.join(__dirname, 'logo.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  miniWin.loadFile(path.join(__dirname, 'mini-transfer.html'));
+
+  miniWin.on('closed', () => {
+    miniWin = null;
   });
 }
 
@@ -718,11 +784,98 @@ ipcMain.on('clear-clipboard', () => {
   }
 });
 
+// ---------- Transfer Server & Mini App IPC ----------
+ipcMain.on('open-mini-transfer', () => {
+  createMiniTransferWindow();
+});
+
+ipcMain.on('close-mini-transfer', () => {
+  if (miniWin && !miniWin.isDestroyed()) {
+    miniWin.close();
+  }
+});
+
+ipcMain.on('dock-to-notch', () => {
+  if (miniWin && !miniWin.isDestroyed()) {
+    miniWin.close();
+  }
+  if (win && !win.isDestroyed()) {
+    win.showInactive();
+    win.webContents.send('focus-transfer-tab');
+  }
+});
+
+ipcMain.handle('get-transfer-server-info', () => {
+  return transferServer ? transferServer.getInfo() : null;
+});
+
+ipcMain.handle('choose-files-to-share', async () => {
+  if (!transferServer) return [];
+  const result = await dialog.showOpenDialog({
+    title: 'Select Files to Share via Notcha Drop',
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+    transferServer.shareFiles(result.filePaths);
+    broadcastTransferEvent('shared-files-updated', transferServer.sharedFiles);
+    broadcastTransferEvent('transfers-history-updated', transferServer.history);
+    return transferServer.sharedFiles;
+  }
+  return transferServer.sharedFiles;
+});
+
+ipcMain.handle('share-files', async (_e, paths) => {
+  if (transferServer && Array.isArray(paths)) {
+    transferServer.shareFiles(paths);
+    broadcastTransferEvent('shared-files-updated', transferServer.sharedFiles);
+    broadcastTransferEvent('transfers-history-updated', transferServer.history);
+    return transferServer.sharedFiles;
+  }
+  return [];
+});
+
+ipcMain.handle('clear-shared-files', async () => {
+  if (transferServer) {
+    transferServer.clearSharedFiles();
+    broadcastTransferEvent('shared-files-updated', transferServer.sharedFiles);
+  }
+  return true;
+});
+
+ipcMain.handle('get-transfers-history', () => {
+  return transferServer ? transferServer.history : [];
+});
+
+ipcMain.handle('clear-transfers-history', async () => {
+  if (transferServer) {
+    transferServer.clearHistory();
+    broadcastTransferEvent('transfers-history-updated', transferServer.history);
+  }
+  return true;
+});
+
+ipcMain.on('open-transfers-folder', () => {
+  const dir = transferServer ? transferServer.downloadDir : path.join(os.homedir(), 'Downloads', 'Notcha Transfers');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  shell.openPath(dir);
+});
+
+ipcMain.on('show-item-in-folder', (_e, filePath) => {
+  if (filePath && fs.existsSync(filePath)) {
+    shell.showItemInFolder(filePath);
+  } else if (transferServer) {
+    shell.openPath(transferServer.downloadDir);
+  }
+});
+
 // ---------- Lifecycle ----------
 app.whenReady().then(() => {
   if (process.platform === 'darwin') app.dock.hide();
   createWindow();
   startClipboardWatcher();
+  initTransferServer();
 
   globalShortcut.register('CommandOrControl+Alt+N', () => {
     if (win && !win.isDestroyed()) win.webContents.send('toggle-hide');
@@ -733,5 +886,8 @@ app.whenReady().then(() => {
   screen.on('display-removed', () => place());
 });
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  if (transferServer) transferServer.stop();
+  globalShortcut.unregisterAll();
+});
 app.on('window-all-closed', () => app.quit());

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
+  <title>Notcha Transfer</title>
+  <style>
+    :root {
+      --bg: rgba(13, 12, 18, 0.95);
+      --surface: rgba(255, 255, 255, 0.07);
+      --surface-hover: rgba(255, 255, 255, 0.13);
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.35);
+      --success: #10b981;
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #ffffff;
+      --text-dim: rgba(255, 255, 255, 0.65);
+      --text-mute: rgba(255, 255, 255, 0.4);
+      --spring: cubic-bezier(0.34, 1.45, 0.5, 1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .mini-shell {
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      backdrop-filter: blur(36px);
+      -webkit-backdrop-filter: blur(36px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 24px var(--accent-glow);
+      display: flex;
+      flex-direction: column;
+      padding: 14px 16px;
+      overflow: hidden;
+    }
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 28px;
+      -webkit-app-region: drag;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .title-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .title-left svg { width: 14px; height: 14px; fill: var(--accent); }
+    .title-text { font-size: 12.5px; font-weight: 700; color: #fff; letter-spacing: -0.2px; }
+    .titlebar-btns {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      -webkit-app-region: no-drag;
+    }
+    .icon-btn {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 0;
+      background: var(--surface);
+      color: var(--text-dim);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      transition: all 0.15s ease;
+    }
+    .icon-btn:hover { background: var(--surface-hover); color: #fff; }
+    .icon-btn.close:hover { background: #f43f5e; color: #fff; }
+
+    /* Server status pill */
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      border-radius: 12px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+    .mini-tool-btn {
+      border: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 3px 8px;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .mini-tool-btn:hover { background: var(--surface-hover); color: #fff; }
+
+    /* Dropzone */
+    .dropzone {
+      width: 100%;
+      border: 2px dashed rgba(56, 189, 248, 0.35);
+      border-radius: 16px;
+      padding: 22px 14px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      background: rgba(56, 189, 248, 0.03);
+      transition: all 0.2s;
+      margin-bottom: 12px;
+    }
+    .dropzone.dragover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent);
+      transform: scale(1.02);
+    }
+    .dropzone svg { width: 24px; height: 24px; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 2.2; }
+    .dropzone-title { font-size: 12.5px; font-weight: 700; color: #fff; }
+    .dropzone-sub { font-size: 10.5px; color: var(--text-dim); }
+
+    /* Active shared files list */
+    .active-shared-wrap {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 10px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .tag-btn {
+      border: 0;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 6px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+
+    /* History section */
+    .history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .history-title { font-size: 11px; font-weight: 700; color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.5px; }
+    .history-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding-right: 2px;
+    }
+    .history-list::-webkit-scrollbar { width: 3px; }
+    .history-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 2px; }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 9px;
+      background: var(--surface);
+      border: 1px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .history-item:hover { background: var(--surface-hover); border-color: rgba(255, 255, 255, 0.08); }
+    .item-left { min-width: 0; flex: 1; padding-right: 8px; }
+    .item-name { font-size: 12px; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item-meta { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+    .item-btn {
+      border: 0;
+      background: transparent;
+      color: var(--text-dim);
+      padding: 2px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+    .item-btn:hover { color: var(--accent); }
+    .item-btn svg { width: 13px; height: 13px; fill: currentColor; }
+
+    /* QR Overlay */
+    .qr-modal {
+      display: none;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(13, 12, 18, 0.96);
+      backdrop-filter: blur(28px);
+      border-radius: 24px;
+      padding: 20px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      z-index: 50;
+    }
+    .qr-box { padding: 10px; background: #fff; border-radius: 12px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div class="mini-shell">
+    <div class="titlebar">
+      <div class="title-left">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span class="title-text">Notcha Drop</span>
+      </div>
+      <div class="titlebar-btns">
+        <button id="toggleQrModalBtn" class="icon-btn" title="QR Code">📱</button>
+        <button id="openFolderBtn" class="icon-btn" title="Open Downloads Folder">📁</button>
+        <button id="closeMiniBtn" class="icon-btn close" title="Close">&times;</button>
+      </div>
+    </div>
+
+    <div class="status-row">
+      <div class="status-badge">
+        <span class="pulse-dot"></span>
+        <span id="miniServerIp">Wi-Fi Drop Active</span>
+      </div>
+      <button id="dockToNotchBtn" class="mini-tool-btn" title="Return to Top Notch">
+        <span>Dock Notch</span>
+      </button>
+    </div>
+
+    <input type="file" id="filePicker" multiple style="display: none;" />
+    <div class="dropzone" id="dropzone">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span class="dropzone-title">Drop files anywhere here</span>
+      <span class="dropzone-sub">or click to browse • Instant Wi-Fi Transfer</span>
+    </div>
+
+    <div class="active-shared-wrap" id="sharedWrap">
+      <span id="sharedText">Sharing 1 file to paired devices</span>
+      <button class="tag-btn" id="clearSharedBtn">Clear</button>
+    </div>
+
+    <div class="history-header">
+      <span class="history-title">Recent Transfers</span>
+      <button class="tag-btn" id="clearHistoryBtn">Clear All</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div style="font-size: 11px; color: var(--text-mute); text-align: center; padding: 14px;">No transfers yet. Drop files or connect your phone!</div>
+    </div>
+
+    <!-- QR Modal -->
+    <div class="qr-modal" id="qrModal">
+      <div style="width: 100%; display: flex; justify-content: flex-end; margin-bottom: 6px;">
+        <button class="icon-btn close" id="closeQrModalBtn">&times;</button>
+      </div>
+      <div class="qr-box" id="qrBox"></div>
+      <p style="font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 4px;">Scan with Phone Camera</p>
+      <p id="qrUrlLabel" style="font-size: 11px; color: var(--accent); word-break: break-all; margin-bottom: 8px;"></p>
+      <p style="font-size: 10.5px; color: var(--text-dim); max-width: 240px;">Works on iOS Safari & Android Chrome over your local Wi-Fi with zero app install.</p>
+    </div>
+  </div>
+
+  <script src="mini-transfer.js"></script>
+</body>
+</html>
