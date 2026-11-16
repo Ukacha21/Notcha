@@ -59,6 +59,11 @@ function createWindow() {
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setIgnoreMouseEvents(true, { forward: true });
+
+  win.webContents.on('console-message', (_e, level, message, line) => {
+    console.log(`[Renderer] ${message} (line ${line})`);
+  });
+
   win.loadFile(path.join(__dirname, 'index.html'));
 
   win.once('ready-to-show', () => {
@@ -142,23 +147,8 @@ let isDockPreviewReady = false;
 let pendingDockPreviewData = null;
 
 function requestMacPermissionsOnLaunch() {
-  if (process.platform !== 'darwin') return;
-  try {
-    // 1. Prompt Accessibility permission if not granted
-    if (systemPreferences && systemPreferences.isTrustedAccessibilityClient) {
-      systemPreferences.isTrustedAccessibilityClient(true);
-    }
-  } catch (err) {
-    console.warn('Accessibility permission check warning:', err);
-  }
-
-  // 2. Trigger native Screen Recording and Accessibility prompts via dock-helper / media-helper
-  try {
-    const dockHelperPath = getAssetPath('dock-helper');
-    if (fs.existsSync(dockHelperPath)) {
-      execFile(dockHelperPath, ['--prompt-permissions'], () => {});
-    }
-  } catch (_) {}
+  // Do not aggressively interrupt the user or open System Settings on launch.
+  // Permissions are checked quietly by background helpers without popup dialogs.
 }
 
 function createDockPreviewWindow() {
@@ -1269,7 +1259,6 @@ ipcMain.on('close-dock-window', (_e, payload) => {
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.dock.hide();
-    requestMacPermissionsOnLaunch();
   }
   createWindow();
   startClipboardWatcher();
