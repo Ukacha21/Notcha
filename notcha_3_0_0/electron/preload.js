@@ -25,6 +25,10 @@ contextBridge.exposeInMainWorld('api', {
   getSystemVolume: () => ipcRenderer.invoke('get-system-volume'),
   setSystemVolume: (vol) => ipcRenderer.send('set-system-volume', vol),
 
+  // Audio Output Routing
+  getAudioDevices: () => ipcRenderer.invoke('get-audio-devices'),
+  setAudioDevice: (id) => ipcRenderer.invoke('set-audio-device', id),
+
   // Clipboard
   getClipboardHistory: () => ipcRenderer.invoke('get-clipboard-history'),
   copyClipboardText: (text) => ipcRenderer.send('copy-clipboard-text', text),

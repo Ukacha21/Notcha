@@ -664,6 +664,39 @@ ipcMain.on('set-system-volume', (_e, vol) => {
   }
 });
 
+// Audio routing devices
+ipcMain.handle('get-audio-devices', async () => {
+  if (process.platform === 'darwin') {
+    return new Promise((resolve) => {
+      execFile(mediaHelperPath, ['getaudiodevices'], (err, stdout) => {
+        if (!err && stdout && stdout.trim()) {
+          try {
+            const list = JSON.parse(stdout.trim());
+            return resolve(Array.isArray(list) ? list : []);
+          } catch (_) {}
+        }
+        resolve([]);
+      });
+    });
+  }
+  return [];
+});
+
+ipcMain.handle('set-audio-device', async (_e, deviceId) => {
+  if (!deviceId) return false;
+  if (process.platform === 'darwin') {
+    return new Promise((resolve) => {
+      execFile(mediaHelperPath, ['setaudiodevice', String(deviceId)], (err, stdout) => {
+        if (!err && stdout && stdout.trim().includes('OK')) {
+          return resolve(true);
+        }
+        resolve(false);
+      });
+    });
+  }
+  return false;
+});
+
 // Clipboard
 ipcMain.handle('get-clipboard-history', () => clipboardHistory);
 ipcMain.on('copy-clipboard-text', (_e, text) => {

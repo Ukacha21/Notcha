@@ -117,6 +117,11 @@ function switchTab(tabName) {
   tabBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabName));
   panels.forEach((p) => p.classList.toggle('active', p.id === `panel${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`));
   hidePowerConfirmation();
+  if (tabName === 'music') {
+    refreshAudioDevices();
+  } else {
+    closeAudioRouteSheet();
+  }
 }
 
 tabBtns.forEach((btn) => {
@@ -561,6 +566,131 @@ setInterval(() => {
   }
 }, 1000);
 
+// ==========================================
+// AUDIO OUTPUT ROUTING
+// ==========================================
+const audioRouteSheet = $('audioRouteSheet');
+const routeSheetCloseBtn = $('routeSheetCloseBtn');
+const routeDeviceList = $('routeDeviceList');
+let audioDevices = [];
+let currentOutputDevice = null;
+
+if (routeSheetCloseBtn) {
+  routeSheetCloseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAudioRouteSheet();
+  });
+}
+
+function getDeviceIconSvg(transport) {
+  if (transport === 'bluetooth') {
+    return `<svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>`;
+  }
+  if (transport === 'headphones') {
+    return `<svg viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>`;
+  }
+  if (transport === 'display') {
+    return `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+  }
+  if (transport === 'usb') {
+    return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10l4-4 4 4"/></svg>`;
+  }
+  if (transport === 'airplay') {
+    return `<svg viewBox="0 0 24 24"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+}
+
+async function refreshAudioDevices() {
+  if (!window.api || !window.api.getAudioDevices) return;
+  try {
+    const list = await window.api.getAudioDevices();
+    if (Array.isArray(list) && list.length > 0) {
+      audioDevices = list;
+      const def = list.find((d) => d.isDefault) || list[0];
+      currentOutputDevice = def;
+      updateAudioPillLabels();
+      renderAudioRouteList();
+    }
+  } catch (_) {}
+}
+
+function updateAudioPillLabels() {
+  if (!currentOutputDevice) return;
+  const pills = document.querySelectorAll('.audio-output-pill');
+  pills.forEach((pill) => {
+    const iconSpan = pill.querySelector('.route-pill-icon');
+    const nameSpan = pill.querySelector('.route-pill-name');
+    if (iconSpan) iconSpan.innerHTML = getDeviceIconSvg(currentOutputDevice.transport);
+    if (nameSpan) {
+      nameSpan.textContent = currentOutputDevice.name;
+      nameSpan.title = currentOutputDevice.name;
+    }
+  });
+}
+
+function renderAudioRouteList() {
+  if (!routeDeviceList) return;
+  if (!audioDevices || audioDevices.length === 0) {
+    routeDeviceList.innerHTML = `<div style="text-align:center; font-size:11px; color:var(--text-mute); padding:16px;">No audio output devices detected</div>`;
+    return;
+  }
+
+  routeDeviceList.innerHTML = audioDevices.map((dev) => `
+    <button class="route-device-item ${dev.isDefault ? 'active' : ''}" data-id="${dev.id}" type="button">
+      <div class="route-device-left">
+        ${getDeviceIconSvg(dev.transport)}
+        <span class="route-device-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span>
+      </div>
+      <div class="route-device-right">
+        <span class="route-transport-tag">${escapeHtml(dev.transport)}</span>
+        <svg class="route-check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </button>
+  `).join('');
+
+  routeDeviceList.querySelectorAll('.route-device-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = item.dataset.id;
+      const target = audioDevices.find((d) => String(d.id) === String(id));
+      if (!target) return;
+
+      const ok = await window.api.setAudioDevice(target.id);
+      if (ok) {
+        audioDevices.forEach((d) => { d.isDefault = (String(d.id) === String(target.id)); });
+        currentOutputDevice = target;
+        updateAudioPillLabels();
+        renderAudioRouteList();
+
+        try {
+          const newVol = await window.api.getSystemVolume();
+          if (typeof newVol === 'number' && activeMedia) {
+            activeMedia.volume = newVol;
+            const volEl = document.querySelector('.card-vol');
+            const volFill = document.querySelector('.volume-row .slider-fill');
+            const volNum = document.querySelector('.vol-num');
+            if (volEl) volEl.value = newVol;
+            if (volFill) volFill.style.width = `${newVol}%`;
+            if (volNum) volNum.textContent = `${newVol}%`;
+          }
+        } catch (_) {}
+      }
+    });
+  });
+}
+
+function openAudioRouteSheet() {
+  if (!audioRouteSheet) return;
+  audioRouteSheet.style.display = 'flex';
+  refreshAudioDevices();
+}
+
+function closeAudioRouteSheet() {
+  if (!audioRouteSheet) return;
+  audioRouteSheet.style.display = 'none';
+}
+
 function renderActiveMedia() {
   if (!mediaContainer) return;
 
@@ -572,8 +702,23 @@ function renderActiveMedia() {
         </div>
         <div class="empty-title">No Media Playing</div>
         <div class="empty-subtitle">Play audio in Spotify, Apple Music, YouTube, VLC or your browser to control it here.</div>
+        <div class="empty-route-section">
+          <span class="empty-route-label">Current Audio Output:</span>
+          <button class="audio-output-pill empty-output-pill" id="emptyAudioOutputBtn" title="Switch Audio Output Device" type="button">
+            <span class="route-pill-icon">${getDeviceIconSvg(currentOutputDevice ? currentOutputDevice.transport : 'speaker')}</span>
+            <span class="route-pill-name">${escapeHtml(currentOutputDevice ? currentOutputDevice.name : 'Audio Output')}</span>
+            <svg class="route-pill-arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
       </div>
     `;
+    const emptyBtn = mediaContainer.querySelector('#emptyAudioOutputBtn');
+    if (emptyBtn) {
+      emptyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAudioRouteSheet();
+      });
+    }
     updateCompactCompanion();
     return;
   }
@@ -612,6 +757,16 @@ function renderActiveMedia() {
     if (iconCircle && !iconCircle.classList.contains(s.icon)) {
       iconCircle.className = `app-icon-circle ${s.icon}`;
       iconCircle.innerHTML = getAppIconSvg(s.icon);
+    }
+
+    const outputPillName = existingCard.querySelector('.audio-output-pill .route-pill-name');
+    const outputPillIcon = existingCard.querySelector('.audio-output-pill .route-pill-icon');
+    if (outputPillName && currentOutputDevice) {
+      outputPillName.textContent = currentOutputDevice.name;
+      outputPillName.title = currentOutputDevice.name;
+    }
+    if (outputPillIcon && currentOutputDevice) {
+      outputPillIcon.innerHTML = getDeviceIconSvg(currentOutputDevice.transport);
     }
 
     const statusPill = existingCard.querySelector('.status-pill');
@@ -664,8 +819,15 @@ function renderActiveMedia() {
             <span class="app-icon-circle ${s.icon}">${getAppIconSvg(s.icon)}</span>
             <span class="app-name-label">${escapeHtml(s.name)}</span>
           </div>
-          <div class="status-pill ${isPlaying ? 'playing' : ''}">
-            ${isPlaying ? '<span class="status-pulse-dot"></span> Active' : '⏸ Paused'}
+          <div class="header-right-actions">
+            <button class="audio-output-pill" id="audioOutputBtn" title="Switch Audio Output Device" type="button">
+              <span class="route-pill-icon">${getDeviceIconSvg(currentOutputDevice ? currentOutputDevice.transport : 'speaker')}</span>
+              <span class="route-pill-name">${escapeHtml(currentOutputDevice ? currentOutputDevice.name : 'Audio Output')}</span>
+              <svg class="route-pill-arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="status-pill ${isPlaying ? 'playing' : ''}">
+              ${isPlaying ? '<span class="status-pulse-dot"></span> Active' : '⏸ Paused'}
+            </div>
           </div>
         </div>
 
@@ -720,6 +882,14 @@ function renderActiveMedia() {
     `;
 
     const card = mediaContainer.querySelector('.active-media-card');
+    const routeBtn = card.querySelector('#audioOutputBtn');
+    if (routeBtn) {
+      routeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAudioRouteSheet();
+      });
+    }
+
     card.querySelector('.card-playpause').addEventListener('click', (e) => {
       e.stopPropagation();
       handleMediaPlayPause();
@@ -932,6 +1102,7 @@ if (powerConfirmProceedBtn) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hidePowerConfirmation();
+    closeAudioRouteSheet();
   }
 });
 
@@ -1099,3 +1270,9 @@ function tick(force) {
 setInterval(() => tick(false), 250);
 updateFocusDurationDisplay();
 render();
+refreshAudioDevices();
+setInterval(() => {
+  if (activeTab === 'music') {
+    refreshAudioDevices();
+  }
+}, 4000);

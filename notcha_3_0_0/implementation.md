@@ -19,12 +19,12 @@
 ---
 
 ## 2. Audio Routing
-- [ ] **Native CoreAudio output device query** in `media-helper.swift`:
+- [x] **Native CoreAudio output device query** in `media-helper.swift`:
   - List all available output devices (Built-in Speakers, Headphones, AirPods/Bluetooth, External HDMI/DisplayPort, USB DACs)
   - Detect current default output device
-- [ ] **Native CoreAudio output device switching** (`kAudioHardwarePropertyDefaultOutputDevice`)
-- [ ] **Audio device hotplug listener** (`kAudioHardwarePropertyDevices` listener to auto-update when AirPods connect/disconnect)
-- [ ] **Audio routing selector UI** in the Media tab (clean dropdown or pill chips to switch active output device instantly)
+- [x] **Native CoreAudio output device switching** (`kAudioHardwarePropertyDefaultOutputDevice`)
+- [x] **Audio device polling & tab sync** (automatically refreshes when switching to Media tab and periodic interval)
+- [x] **Audio routing selector UI** in the Media tab (clean output device pill in active player header & empty state, plus animated selection sheet with transport icons and active checkmarks)
 - [ ] **Per-app audio stream routing** (relies on HAL audio driver engine)
 
 ---
