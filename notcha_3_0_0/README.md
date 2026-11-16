@@ -4,12 +4,29 @@
 
 ![Notcha](logo.png)
 
-## What's New in 3.0.0 (In Progress)
+## What's New in 3.0.0
 
-- 🎧 **Audio Routing & Output Switcher**: Instant switching between AirPods, built-in speakers, HDMI, and USB audio interfaces.
-- 🗂️ **Cross-Platform File Transfer**: Local Wi-Fi transfer hub with QR code mobile web portal and transfer history/gallery.
-- 🖼️ **Dock Icon Window Previews**: Hover over dock icons to preview running app windows.
-- 🎚️ **Per-App Volume Mixer**: Software volume adjustments for individual apps.
+- 🎚️ **Multi-App Volume Mixer**:
+  - Independent software volume sliders and mute/unmute buttons for all active media applications (Spotify, Apple Music, VLC, QuickTime, Chrome, Brave, Safari, Arc, Telegram, Discord).
+  - Real-time Master System Output CoreAudio sync with zero-latency hardware volume tracking.
+  - Interactive volume dragging lock preventing background polling from overriding active slider input.
+
+- 🎧 **CoreAudio Output Routing**:
+  - Instant output device switcher right in the Media tab (AirPods, Bluetooth headphones, Built-in Speakers, HDMI / DisplayPort, USB DACs).
+  - Clean device pill in both active and empty player headers with animated selection sheet modal.
+
+- 🗂️ **Cross-Platform File Transfer Hub & Past Transfers Gallery**:
+  - High-speed local Wi-Fi transfer server on port `53317` with streaming chunked transfers (no file size limits).
+  - Zero-install mobile web drop portal: connect any iPhone (Safari) or Android (Chrome) via 1-click QR code pairing.
+  - Dedicated **"Transfer"** tab inside the top notch island with drag-and-drop file sharing.
+  - **Floating Mini App Window option**: users can choose to drop files onto the top notch OR open the floating mini app window with a quick "Dock Notch" return button.
+  - Past Transfers Gallery with album filters (**All**, **Photos**, **Videos**, **Docs**, **Archives**), transfer direction badges (📥 Received / 📤 Sent), and instant "Show in Finder".
+
+- 🖼️ **Dock Icon Window Previews**:
+  - Hover over any macOS Dock icon to display live window preview thumbnails anchored directly above the Dock.
+  - Frosted-glass backdrop blur with application icon, name, and window count pill badge.
+  - Click any card to instantly raise and focus that window, or click the close button to dismiss it.
+  - Automatic permissions check on startup requesting macOS Accessibility and Screen Recording access cleanly.
 
 ## What's New in 2.0.1
 

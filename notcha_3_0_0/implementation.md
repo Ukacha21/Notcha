@@ -92,4 +92,4 @@
 2. **Milestone 2:** Cross-Platform File Transfer Hub & QR Mobile Web Portal + Gallery + Floating Mini App ✅ *Completed*
 3. **Milestone 3:** Dock Icon Hover Window Previews (Swift Accessibility + Window Snapshots) ✅ *Completed*
 4. **Milestone 4:** Multi-App Volume Mixer (Per-App Sliders for Media & Running Apps) ✅ *Completed*
-5. **Release:** Build & Release v3.0.0 (macOS & Windows Installers) ⬅ *In Progress*
+5. **Release:** Build & Release v3.0.0 (macOS & Windows Installers) ✅ *Completed*
