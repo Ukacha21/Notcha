@@ -252,7 +252,7 @@ function createDockPreviewWindow() {
 
   dockPreviewWin = new BrowserWindow({
     width: 280,
-    height: 260,
+    height: 280,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -311,19 +311,31 @@ function showDockPreview(data) {
     const cardGap = 10;
     const shellPadding = 28;
     const count = Math.min(4, data.windows.length);
-    const previewW = Math.round(count * cardWidth + (count - 1) * cardGap + shellPadding + 16);
-    const previewH = 252;
+    const previewW = Math.round(count * cardWidth + (count - 1) * cardGap + shellPadding + 36);
+    const previewH = 280;
 
     const display = screen.getDisplayNearestPoint({ x: Math.round(fx), y: Math.round(fy) }) || screen.getPrimaryDisplay();
     const { x: dispX, y: dispY, width: dispW, height: dispH } = display.bounds;
 
     let posX = Math.round(fx + (fw - previewW) / 2);
-    posX = Math.max(dispX + 12, Math.min(dispX + dispW - previewW - 12, posX));
+    let posY = Math.round(fy - previewH - 10);
 
-    let posY = Math.round(fy - previewH - 12);
-    if (posY < dispY + 30) {
-      posY = Math.round(fy + fh + 12);
+    // Multi-orientation Dock support (Bottom, Left, Right)
+    if (fx <= dispX + 80) {
+      posX = Math.round(fx + fw + 10);
+      posY = Math.round(fy + (fh - previewH) / 2);
+    } else if (fx + fw >= dispX + dispW - 80) {
+      posX = Math.round(fx - previewW - 10);
+      posY = Math.round(fy + (fh - previewH) / 2);
+    } else {
+      if (posY < dispY + 10) {
+        posY = Math.round(fy + fh + 10);
+      }
     }
+
+    // Safety screen boundary clamping
+    posX = Math.max(dispX + 10, Math.min(dispX + dispW - previewW - 10, posX));
+    posY = Math.max(dispY + 10, Math.min(dispY + dispH - previewH - 10, posY));
 
     if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {
       dockPreviewWin.setBounds({ x: posX, y: posY, width: previewW, height: previewH });
@@ -1388,7 +1400,12 @@ ipcMain.on('activate-dock-window', (_e, payload) => {
     }
     isMouseOverDockPreview = false;
     if (dockHelperProcess && dockHelperProcess.stdin && dockHelperProcess.stdin.writable && payload) {
-      dockHelperProcess.stdin.write(JSON.stringify({ action: 'raise', pid: payload.pid, index: payload.index }) + '\n');
+      dockHelperProcess.stdin.write(JSON.stringify({
+        action: 'raise',
+        pid: payload.pid,
+        index: payload.index,
+        title: payload.title || '',
+      }) + '\n');
     }
   } catch (err) {
     console.warn('activate-dock-window error:', err);
@@ -1398,7 +1415,12 @@ ipcMain.on('activate-dock-window', (_e, payload) => {
 ipcMain.on('close-dock-window', (_e, payload) => {
   try {
     if (dockHelperProcess && dockHelperProcess.stdin && dockHelperProcess.stdin.writable && payload) {
-      dockHelperProcess.stdin.write(JSON.stringify({ action: 'close', pid: payload.pid, index: payload.index }) + '\n');
+      dockHelperProcess.stdin.write(JSON.stringify({
+        action: 'close',
+        pid: payload.pid,
+        index: payload.index,
+        title: payload.title || '',
+      }) + '\n');
     }
   } catch (err) {
     console.warn('close-dock-window error:', err);

@@ -3,10 +3,19 @@ import ApplicationServices
 import CoreGraphics
 
 // ==============================================================================
-// Notcha Dock Helper: Tracks macOS Dock Hover & Captures Window Previews
+// Notcha Dock Helper v3.3.0: Tracks macOS Dock Hover & Captures Window Previews
 // ==============================================================================
 
 typealias CGWindowListCreateImageFunc = @convention(c) (CGRect, UInt32, CGWindowID, UInt32) -> Unmanaged<CGImage>?
+
+func cleanAppName(_ str: String) -> String {
+    return str.unicodeScalars
+        .filter { !($0.value >= 0x200B && $0.value <= 0x200F) && !($0.value >= 0x202A && $0.value <= 0x202E) && !CharacterSet.controlCharacters.contains($0) }
+        .map { String($0) }
+        .joined()
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+}
 
 class DockHelper {
     var dockAx: AXUIElement?
@@ -66,7 +75,7 @@ class DockHelper {
 
     func captureThumbnail(windowId: CGWindowID, maxW: CGFloat = 260) -> String? {
         guard let fn = self.cgCreateImageFn else { return nil }
-        // 8 = .optionIncludingWindow (kCGWindowListOptionIncludingWindow)
+        // 8 = .optionIncludingWindow (kCGWindowListOptionIncludingWindow), 1 = boundsIgnoreFraming
         guard let img = fn(.null, 8, windowId, 1)?.takeRetainedValue() else {
             return nil
         }
@@ -155,12 +164,18 @@ class DockHelper {
     }
 
     func emitHoverData(appName: String, rect: CGRect) {
-        // Find matching running application
-        let runningApps = NSWorkspace.shared.runningApplications
+        let runningApps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        let targetClean = cleanAppName(appName)
+        let targetNoSpace = targetClean.replacingOccurrences(of: " ", with: "")
+
         guard let app = runningApps.first(where: {
-            $0.localizedName == appName ||
-            $0.bundleIdentifier?.lowercased() == appName.lowercased() ||
-            ($0.bundleIdentifier?.lowercased().hasSuffix(appName.lowercased().replacingOccurrences(of: " ", with: "")) ?? false)
+            let locClean = cleanAppName($0.localizedName ?? "")
+            let bid = ($0.bundleIdentifier ?? "").lowercased()
+            guard !locClean.isEmpty else { return false }
+            return locClean == targetClean ||
+                   locClean.contains(targetClean) ||
+                   targetClean.contains(locClean) ||
+                   (!bid.isEmpty && bid.contains(targetNoSpace))
         }) else {
             return
         }
@@ -178,7 +193,6 @@ class DockHelper {
                 (($0[kCGWindowBounds as String] as? [String: Any])?["Height"] as? CGFloat ?? 0) > 80
             }
 
-            // Also check AX windows for titles if CGWindowName is empty
             let appAx = AXUIElementCreateApplication(pid)
             var axWinRef: CFTypeRef?
             AXUIElementCopyAttributeValue(appAx, kAXWindowsAttribute as CFString, &axWinRef)
@@ -187,9 +201,8 @@ class DockHelper {
             for (idx, w) in appWindows.enumerated() {
                 let winId = w[kCGWindowNumber as String] as? CGWindowID ?? 0
                 var title = (w[kCGWindowName as String] as? String) ?? ""
-                let isOnscreen = (w[kCGWindowIsOnscreen as String] as? Bool) ?? true
 
-                var isMin = !isOnscreen
+                var axIsMinimized = false
                 if idx < axWindows.count {
                     let axW = axWindows[idx]
                     if title.isEmpty {
@@ -200,15 +213,28 @@ class DockHelper {
                     var minRef: CFTypeRef?
                     AXUIElementCopyAttributeValue(axW, kAXMinimizedAttribute as CFString, &minRef)
                     if let m = minRef as? Bool, m {
-                        isMin = true
+                        axIsMinimized = true
                     }
                 }
 
                 if title.isEmpty {
-                    continue
+                    for axW in axWindows {
+                        var axTitleRef: CFTypeRef?
+                        AXUIElementCopyAttributeValue(axW, kAXTitleAttribute as CFString, &axTitleRef)
+                        if let t = axTitleRef as? String, !t.isEmpty {
+                            title = t
+                            break
+                        }
+                    }
                 }
 
-                let thumbB64 = isMin ? "" : (captureThumbnail(windowId: winId) ?? "")
+                if title.isEmpty {
+                    title = appWindows.count > 1 ? "\(appName) (Window \(idx + 1))" : "\(appName) Window"
+                }
+
+                // Live capture: if image captured, it is active and NOT minimized!
+                let thumbB64 = captureThumbnail(windowId: winId) ?? ""
+                let isMin = thumbB64.isEmpty && axIsMinimized
 
                 windowData.append([
                     "id": Int(winId),
@@ -220,7 +246,7 @@ class DockHelper {
             }
         }
 
-        // If no CG windows were found, check if there are AX windows (e.g. minimized)
+        // Fallback to AX windows if CG returned no windows (e.g. all minimized to dock)
         if windowData.isEmpty {
             let appAx = AXUIElementCreateApplication(pid)
             var axWinRef: CFTypeRef?
@@ -229,10 +255,10 @@ class DockHelper {
                 for (idx, axW) in axWindows.enumerated() {
                     var axTitleRef: CFTypeRef?
                     AXUIElementCopyAttributeValue(axW, kAXTitleAttribute as CFString, &axTitleRef)
-                    let title = (axTitleRef as? String) ?? "\(appName) Window"
+                    let title = (axTitleRef as? String) ?? (axWindows.count > 1 ? "\(appName) (Window \(idx + 1))" : "\(appName) Window")
                     var minRef: CFTypeRef?
                     AXUIElementCopyAttributeValue(axW, kAXMinimizedAttribute as CFString, &minRef)
-                    let isMin = (minRef as? Bool) ?? false
+                    let isMin = (minRef as? Bool) ?? true
 
                     windowData.append([
                         "id": idx,
@@ -277,36 +303,71 @@ class DockHelper {
         }
     }
 
-    func raiseWindow(pid: pid_t, windowIndex: Int) {
+    func raiseWindow(pid: pid_t, windowIndex: Int, windowTitle: String? = nil) {
         guard let app = NSRunningApplication(processIdentifier: pid) else { return }
-        app.activate()
+        app.activate(options: .activateIgnoringOtherApps)
 
         let appAx = AXUIElementCreateApplication(pid)
         var winListRef: CFTypeRef?
         AXUIElementCopyAttributeValue(appAx, kAXWindowsAttribute as CFString, &winListRef)
-        if let list = winListRef as? [AXUIElement], windowIndex < list.count {
-            let win = list[windowIndex]
-            AXUIElementPerformAction(win, kAXRaiseAction as CFString)
-            AXUIElementSetAttributeValue(win, kAXMainAttribute as CFString, kCFBooleanTrue)
+        guard let list = winListRef as? [AXUIElement], !list.isEmpty else { return }
+
+        // 1. Try matching target window by title
+        if let targetTitle = windowTitle, !targetTitle.isEmpty {
+            for win in list {
+                var tRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(win, kAXTitleAttribute as CFString, &tRef)
+                if let t = tRef as? String, t == targetTitle {
+                    AXUIElementSetAttributeValue(win, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+                    AXUIElementPerformAction(win, kAXRaiseAction as CFString)
+                    AXUIElementSetAttributeValue(win, kAXMainAttribute as CFString, kCFBooleanTrue)
+                    return
+                }
+            }
         }
+
+        // 2. Fallback by index
+        let targetIdx = windowIndex < list.count ? windowIndex : 0
+        let win = list[targetIdx]
+        AXUIElementSetAttributeValue(win, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        AXUIElementPerformAction(win, kAXRaiseAction as CFString)
+        AXUIElementSetAttributeValue(win, kAXMainAttribute as CFString, kCFBooleanTrue)
     }
 
-    func closeWindow(pid: pid_t, windowIndex: Int) {
+    func closeWindow(pid: pid_t, windowIndex: Int, windowTitle: String? = nil) {
         let appAx = AXUIElementCreateApplication(pid)
         var winListRef: CFTypeRef?
         AXUIElementCopyAttributeValue(appAx, kAXWindowsAttribute as CFString, &winListRef)
-        if let list = winListRef as? [AXUIElement], windowIndex < list.count {
-            let win = list[windowIndex]
-            var closeBtnRef: CFTypeRef?
-            AXUIElementCopyAttributeValue(win, kAXCloseButtonAttribute as CFString, &closeBtnRef)
-            if let closeBtn = closeBtnRef {
-                AXUIElementPerformAction(closeBtn as! AXUIElement, kAXPressAction as CFString)
+        guard let list = winListRef as? [AXUIElement], !list.isEmpty else { return }
+
+        // 1. Try matching target window by title
+        if let targetTitle = windowTitle, !targetTitle.isEmpty {
+            for win in list {
+                var tRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(win, kAXTitleAttribute as CFString, &tRef)
+                if let t = tRef as? String, t == targetTitle {
+                    var closeBtnRef: CFTypeRef?
+                    AXUIElementCopyAttributeValue(win, kAXCloseButtonAttribute as CFString, &closeBtnRef)
+                    if let closeBtn = closeBtnRef {
+                        AXUIElementPerformAction(closeBtn as! AXUIElement, kAXPressAction as CFString)
+                    }
+                    return
+                }
             }
+        }
+
+        // 2. Fallback by index
+        let targetIdx = windowIndex < list.count ? windowIndex : 0
+        let win = list[targetIdx]
+        var closeBtnRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(win, kAXCloseButtonAttribute as CFString, &closeBtnRef)
+        if let closeBtn = closeBtnRef {
+            AXUIElementPerformAction(closeBtn as! AXUIElement, kAXPressAction as CFString)
         }
     }
 
     func start() {
-        // Start background thread to read commands from stdin
+        // Background thread reading commands from stdin
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             while let line = readLine() {
                 guard let self = self else { break }
@@ -318,14 +379,15 @@ class DockHelper {
                     let action = dict["action"] as? String ?? ""
                     let pid = pid_t(dict["pid"] as? Int ?? 0)
                     let idx = dict["index"] as? Int ?? 0
+                    let title = dict["title"] as? String
 
                     if action == "raise" {
                         DispatchQueue.main.async {
-                            self.raiseWindow(pid: pid, windowIndex: idx)
+                            self.raiseWindow(pid: pid, windowIndex: idx, windowTitle: title)
                         }
                     } else if action == "close" {
                         DispatchQueue.main.async {
-                            self.closeWindow(pid: pid, windowIndex: idx)
+                            self.closeWindow(pid: pid, windowIndex: idx, windowTitle: title)
                         }
                     } else if action == "quit" {
                         exit(0)

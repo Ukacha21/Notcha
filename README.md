@@ -1,4 +1,4 @@
-# Notcha 3.2.1
+# Notcha 3.3.0
 
 > A dynamic-island style desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, power controls, and high-speed Wi-Fi file transfers.
 
@@ -11,30 +11,22 @@
 **Does the macOS release support Apple Silicon?**
 **Yes, 100% natively!**
 
-- **Native Apple Silicon Architecture**: Notcha 3.2.1 includes a dedicated native Apple Silicon build (`Notcha-3.2.1-arm64.dmg` and `Notcha-3.2.1-arm64-mac.zip`) optimized specifically for Apple's M-series chips (M1, M2, M3, M4 and their Pro/Max/Ultra variants).
-- **Universal Mach-O Helper Binaries**: Both native companion binaries—`media-helper` (MediaRemote and CoreAudio controller) and `dock-helper` (Dock icon tracking and live window preview capture)—are compiled as **Universal Mach-O binaries** containing both `arm64` and `x86_64` executable slices.
+- **Native Apple Silicon Architecture**: Notcha 3.3.0 includes dedicated native Apple Silicon packages (`Notcha-3.3.0-arm64.dmg` and `Notcha-3.3.0-arm64-mac.zip`) specifically compiled for Apple's M-series chips (M1, M2, M3, M4 and their Pro/Max/Ultra variants).
+- **Universal Mach-O Helper Binaries**: Both native helper binaries—`dock-helper` (Dock icon tracking and live window preview capture) and `media-helper` (MediaRemote and CoreAudio controller)—are compiled as **Universal Mach-O binaries** containing both `arm64` and `x86_64` executable slices.
 - **Zero Rosetta 2 Overhead**: Runs directly on bare metal without needing Apple's Rosetta 2 translation layer, ensuring maximum battery efficiency, instant startup, and zero CPU emulation overhead.
-- **Intel Mac Support**: Intel-based Macs continue to be fully supported via native `x64` binaries (`Notcha-3.2.1.dmg` and `Notcha-3.2.1-mac.zip`).
+- **Intel Mac Support**: Intel-based Macs continue to be fully supported via native `x64` packages (`Notcha-3.3.0.dmg` and `Notcha-3.3.0-mac.zip`).
 
 ---
 
-## 🆕 What's New in Version 3.2.1
+## 🆕 What's New in Version 3.3.0
 
-- 🛠️ **Fixed Drag & Drop File Path Resolution (`webUtils.getPathForFile`)**:
-  - In modern Electron, Chromium strips `File.path` on HTML5 drag-and-drop objects, which previously caused dropped files from macOS Finder to fail silently (only clicking "Browse" worked).
-  - Implemented `webUtils.getPathForFile` bridge across all windows (Send window, Receive window, Mini App, and top notch). Dragging files directly from Finder or Windows File Explorer now instantly registers file paths and delivers files seamlessly.
-
-- 🏷️ **Accurate Device Identification & System Logos**:
-  - Replaced ambiguous model guessing with clean, 100% accurate device naming: displays `${ip} | [System Logo / Name]` (e.g. `10.57.89.44 | 🤖 Android`, `10.57.89.78 |  iOS`, `10.57.89.92 | ⊞ Windows`, `10.57.89.155 |  macOS`, `10.57.89.210 | 🐧 Linux`).
-  - Preserves custom device names when set.
-
-- 📊 **Real-time Progress Tracking for Large File Transfers**:
-  - Added live chunk-based transfer progress tracking for both **Sending** (PC to phone) and **Receiving** (phone to PC).
-  - Displays dynamic percent bars, formatted transfer sizes (`45 MB / 1.4 GB`), and target device info across the Send window, Receive window, and the top notch Transfer tab.
-  - Mobile web portal displays live upload progress and download notifications with 1.2s rapid sync.
-
-- ⚡ **Universal Mach-O Binaries**:
-  - `media-helper` and `dock-helper` native Swift binaries compiled with dual `arm64` and `x86_64` architecture slices via `lipo`.
+- 🖼️ **Dock Window Previews Completely Fixed & Overhauled**:
+  - **Live Window Screenshots Restored**: `dock-helper` captures live window buffers directly via `CGWindowListCreateImage` (`kCGWindowListOptionIncludingWindow`). Real live screenshots are rendered across cards, eliminating false minimized placeholders on background windows.
+  - **Complete Preview Visibility & Zero Clipping**: Expanded preview window height to **280px** with generous breathing room, completely eliminating title bar and card clipping.
+  - **Multi-Orientation Dock Support**: Added automatic dock orientation detection (Bottom, Left, Right) with screen edge boundary clamping.
+  - **Unicode App Name Sanitization**: Stripped invisible directional marks (`\u{200E}` used in WhatsApp and localized apps) and filtered out background daemons, ensuring instant matching.
+  - **1-Click Window Focus & Minimized Restore**: Restores minimized windows via `kAXMinimizedAttribute = false` and raises windows with `options: .activateIgnoringOtherApps`.
+  - **Window Title Fallbacks**: Windows with empty titles are assigned clean fallback names (`[App Name] Window`) so no window is discarded.
 
 ---
 
@@ -81,7 +73,7 @@
 - **Rich Track Metadata**: Displays album artwork, song title, and artist name with animated sound-wave visualizers.
 
 ### 🖼️ macOS Dock Icon Window Previews
-- **Hover Window Previews**: Hovering your cursor over any app icon in the macOS Dock displays live window thumbnails anchored above the Dock.
+- **Hover Window Previews**: Hovering your cursor over any app icon in the macOS Dock displays live window thumbnails anchored directly above the Dock.
 - **Window Management**: Click any preview thumbnail to bring that window directly to the front, or close it via the preview card close button.
 - **Dock Status Badges**: Amber badges indicate minimized windows with restore hints.
 
@@ -105,12 +97,16 @@
 
 | Version | Category | Issue Description | Resolution |
 | :--- | :--- | :--- | :--- |
+| **3.3.0** | **Dock Previews** | Background windows were falsely marked minimized with no screenshots. | Captured live image buffers directly with `kCGWindowListOptionIncludingWindow`; verified real images. |
+| **3.3.0** | **Dock Previews** | Preview window was clipped vertically, cutting off title bar and icon. | Expanded popup bounds to 280px with centered breathing room and multi-orientation dock positioning. |
+| **3.3.0** | **Dock Previews** | Hovering over WhatsApp and localized apps did not trigger previews. | Sanitized Unicode directional marks (`\u{200E}`) and matched against regular activation policies. |
+| **3.3.0** | **Dock Previews** | Windows with empty titles were discarded entirely. | Added clean fallback titles (`[App Name] Window`) so all windows are previewed. |
+| **3.3.0** | **Dock Previews** | Clicking minimized window thumbnails failed to restore windows. | Programmatically un-minimized via `kAXMinimizedAttribute = false` and activated with `.activateIgnoringOtherApps`. |
 | **3.2.1** | **File Transfer** | HTML5 drag-and-drop from Finder failed to provide file paths. | Implemented Electron `webUtils.getPathForFile` across all preload bridges. |
 | **3.2.1** | **File Transfer** | Lack of progress feedback during multi-gigabyte transfers. | Added real-time chunked transfer tracking and live progress meters in all windows. |
 | **3.2.1** | **Device Pairing** | Device model names were inaccurate or showed generic placeholders. | Formatted as `${ip} \| [System Logo]` (`🤖 Android`, ` iOS`, `⊞ Windows`, ` macOS`). |
 | **3.2.1** | **Apple Silicon** | Swift helper binaries were x86_64 only, requiring Rosetta 2. | Recompiled `media-helper` and `dock-helper` as Universal Mach-O binaries (`arm64` + `x86_64`). |
 | **3.0.1** | **QR Code** | QR code in mobile connect sheet was cut off at the bottom. | Added centered flex containers with 16px bottom padding and responsive SVG scaling. |
-| **3.0.1** | **Dock Previews** | Window preview height clipped the bottom edges of preview cards. | Expanded preview height to 252px and adjusted card aspect ratio constraints. |
 | **3.0.1** | **Permissions** | App froze on startup (`--:--`) waiting for accessibility permissions. | Hoisted all DOM bindings, added safe error fallbacks, and made permissions passive. |
 | **1.4.1** | **Volume Mixer** | Volume slider snapped back to 80% after dragging. | Added debounce lock and interactive dragging mutex during CoreAudio sync polling. |
 | **1.4.0** | **Media Player** | Phantom media tabs appeared for inactive background apps. | Replaced multi-tab carousel with smart single active player detection. |
@@ -122,15 +118,15 @@
 
 ### macOS
 - **Apple Silicon (M1/M2/M3/M4)**:
-  - **DMG Installer:** `Notcha-3.2.1-arm64.dmg`
-  - **ZIP Archive:** `Notcha-3.2.1-arm64-mac.zip`
+  - **Installer:** `Notcha-3.3.0-arm64.dmg`
+  - **Portable Archive:** `Notcha-3.3.0-arm64-mac.zip`
 - **Intel (x64)**:
-  - **DMG Installer:** `Notcha-3.2.1.dmg`
-  - **ZIP Archive:** `Notcha-3.2.1-mac.zip`
+  - **Installer:** `Notcha-3.3.0.dmg`
+  - **Portable Archive:** `Notcha-3.3.0-mac.zip`
 
 ### Windows (10 & 11, 64-bit)
-- **NSIS Installer:** `Notcha Setup 3.2.1.exe`
-- **ZIP Archive:** `Notcha-3.2.1-win.zip`
+- **NSIS Installer:** `Notcha Setup 3.3.0.exe`
+- **ZIP Archive:** `Notcha-3.3.0-win.zip`
 
 ---
 

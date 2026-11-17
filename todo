@@ -1,7 +1,1 @@
-sharing from the mobile to the pc shows no problem at all but. from pc to mobile only. when i click tp browse. is the file delivered
-
-the drag and drop has some seriuos issues
-
-annd the name of the paired devices are not right, if you cant tell which device it is just showing their adresses is enough and "| [systemlogo android or apple for mac]"
-
-and if the file is not just a few megabyites and its quite large, it should show, sending(loading) or receiving and the sort
+✓ the window preview got broken again (Fixed in v3.3.0: live screenshots with kCGWindowListOptionIncludingWindow, universal dock-helper, multi-orientation positioning, and window restoration)

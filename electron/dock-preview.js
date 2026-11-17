@@ -67,7 +67,7 @@
       card.addEventListener('click', (e) => {
         if (e.target.closest('.close-card-btn')) return;
         if (window.api && window.api.activateDockWindow) {
-          window.api.activateDockWindow({ pid: data.pid, index: win.index });
+          window.api.activateDockWindow({ pid: data.pid, index: win.index, title: win.title });
         }
       });
 
@@ -76,7 +76,7 @@
         closeBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (window.api && window.api.closeDockWindow) {
-            window.api.closeDockWindow({ pid: data.pid, index: win.index });
+            window.api.closeDockWindow({ pid: data.pid, index: win.index, title: win.title });
           }
           card.style.opacity = '0.3';
           card.style.pointerEvents = 'none';
