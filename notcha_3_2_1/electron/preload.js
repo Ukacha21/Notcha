@@ -1,0 +1,95 @@
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+
+contextBridge.exposeInMainWorld('api', {
+  // File Path resolution for HTML5 Drag & Drop (Electron 28+)
+  getPathForFile: (file) => {
+    try {
+      if (webUtils && typeof webUtils.getPathForFile === 'function') {
+        const p = webUtils.getPathForFile(file);
+        if (p) return p;
+      }
+      return file.path || '';
+    } catch (_) {
+      return file?.path || '';
+    }
+  },
+  setIgnore: (v) => ipcRenderer.send('set-ignore', v),
+  quit: () => ipcRenderer.send('quit'),
+  beep: () => ipcRenderer.send('beep'),
+  onToggleHide: (cb) => ipcRenderer.on('toggle-hide', () => cb()),
+
+  // Power actions: 'lock', 'sleep', 'shutdown', 'restart'
+  powerAction: (action) => ipcRenderer.send('power-action', action),
+
+  // DND Mode
+  toggleDND: () => ipcRenderer.invoke('toggle-dnd'),
+  getDND: () => ipcRenderer.invoke('get-dnd'),
+
+  // Media Hub
+  getMediaSources: () => ipcRenderer.invoke('get-media-sources'),
+  sendMediaAction: (data) => ipcRenderer.send('media-action', data),
+  onMediaSourcesUpdated: (cb) => ipcRenderer.on('media-sources-updated', (_e, sources) => cb(sources)),
+
+  // App Launcher
+  launchApp: (target) => ipcRenderer.send('launch-app', target),
+
+  // Volume
+  getSystemVolume: () => ipcRenderer.invoke('get-system-volume'),
+  setSystemVolume: (vol) => ipcRenderer.send('set-system-volume', vol),
+
+  // Audio Output Routing
+  getAudioDevices: () => ipcRenderer.invoke('get-audio-devices'),
+  setAudioDevice: (id) => ipcRenderer.invoke('set-audio-device', id),
+
+  // Multi-App Volume Mixer
+  getAppVolumes: () => ipcRenderer.invoke('get-app-volumes'),
+  setAppVolume: (payload) => ipcRenderer.send('set-app-volume', payload),
+  toggleAppMute: (id) => ipcRenderer.invoke('toggle-app-mute', id),
+
+  // Clipboard
+  getClipboardHistory: () => ipcRenderer.invoke('get-clipboard-history'),
+  copyClipboardText: (text) => ipcRenderer.send('copy-clipboard-text', text),
+  deleteClipboardItem: (id) => ipcRenderer.send('delete-clipboard-item', id),
+  clearClipboard: () => ipcRenderer.send('clear-clipboard'),
+  onClipboardUpdated: (cb) => ipcRenderer.on('clipboard-updated', (_e, list) => cb(list)),
+
+  // Transfer Server & Floating Windows
+  openSendWindow: () => ipcRenderer.send('open-send-window'),
+  closeSendWindow: () => ipcRenderer.send('close-send-window'),
+  setSendWindowAlwaysOnTop: (val) => ipcRenderer.send('set-send-window-always-on-top', val),
+  openReceiveWindow: () => ipcRenderer.send('open-receive-window'),
+  closeReceiveWindow: () => ipcRenderer.send('close-receive-window'),
+  setReceiveWindowAlwaysOnTop: (val) => ipcRenderer.send('set-receive-window-always-on-top', val),
+  getPairedDevice: () => ipcRenderer.invoke('get-paired-device'),
+  pairDevice: (data) => ipcRenderer.invoke('pair-device', data),
+  unpairDevice: () => ipcRenderer.invoke('unpair-device'),
+  getDiscoveredDevices: () => ipcRenderer.invoke('get-discovered-devices'),
+  onDevicePaired: (cb) => ipcRenderer.on('device-paired', (_e, dev) => cb(dev)),
+  onDeviceUnpaired: (cb) => ipcRenderer.on('device-unpaired', () => cb()),
+  onDiscoveredDevicesUpdated: (cb) => ipcRenderer.on('discovered-devices-updated', (_e, devs) => cb(devs)),
+
+  // Transfer Server & Mini App
+  openMiniTransfer: () => ipcRenderer.send('open-mini-transfer'),
+  closeMiniTransfer: () => ipcRenderer.send('close-mini-transfer'),
+  dockToNotch: () => ipcRenderer.send('dock-to-notch'),
+  onFocusTransferTab: (cb) => ipcRenderer.on('focus-transfer-tab', () => cb()),
+  getTransferServerInfo: () => ipcRenderer.invoke('get-transfer-server-info'),
+  chooseFilesToShare: () => ipcRenderer.invoke('choose-files-to-share'),
+  shareFiles: (paths) => ipcRenderer.invoke('share-files', paths),
+  clearSharedFiles: () => ipcRenderer.invoke('clear-shared-files'),
+  getTransfersHistory: () => ipcRenderer.invoke('get-transfers-history'),
+  clearTransfersHistory: () => ipcRenderer.invoke('clear-transfers-history'),
+  openTransfersFolder: () => ipcRenderer.send('open-transfers-folder'),
+  showItemInFolder: (path) => ipcRenderer.send('show-item-in-folder', path),
+  onTransferReceived: (cb) => ipcRenderer.on('transfer-received', (_e, item) => cb(item)),
+  onTransferProgress: (cb) => ipcRenderer.on('transfer-progress', (_e, progress) => cb(progress)),
+  onSharedFilesUpdated: (cb) => ipcRenderer.on('shared-files-updated', (_e, files) => cb(files)),
+  onTransfersHistoryUpdated: (cb) => ipcRenderer.on('transfers-history-updated', (_e, history) => cb(history)),
+
+  // Dock Previews
+  onDockPreviewData: (cb) => ipcRenderer.on('dock-preview-data', (_e, data) => cb(data)),
+  activateDockWindow: (payload) => ipcRenderer.send('activate-dock-window', payload),
+  closeDockWindow: (payload) => ipcRenderer.send('close-dock-window', payload),
+  dockPreviewMouseEnter: () => ipcRenderer.send('dock-preview-mouse-enter'),
+  dockPreviewMouseLeave: () => ipcRenderer.send('dock-preview-mouse-leave'),
+});

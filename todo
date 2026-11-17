@@ -1,2 +1,7 @@
-the minn app should be a separate app, the transfer subtab should show pair device/Paired device id:----, send, receive
-and the send or receive should open a separatewindow, draggable, that allows for the drag and drop,  etc
+sharing from the mobile to the pc shows no problem at all but. from pc to mobile only. when i click tp browse. is the file delivered
+
+the drag and drop has some seriuos issues
+
+annd the name of the paired devices are not right, if you cant tell which device it is just showing their adresses is enough and "| [systemlogo android or apple for mac]"
+
+and if the file is not just a few megabyites and its quite large, it should show, sending(loading) or receiving and the sort
