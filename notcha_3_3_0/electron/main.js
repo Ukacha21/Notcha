@@ -312,30 +312,30 @@ function showDockPreview(data) {
     const shellPadding = 28;
     const count = Math.min(4, data.windows.length);
     const previewW = Math.round(count * cardWidth + (count - 1) * cardGap + shellPadding + 36);
-    const previewH = 280;
+    const previewH = 250;
 
     const display = screen.getDisplayNearestPoint({ x: Math.round(fx), y: Math.round(fy) }) || screen.getPrimaryDisplay();
     const { x: dispX, y: dispY, width: dispW, height: dispH } = display.bounds;
 
     let posX = Math.round(fx + (fw - previewW) / 2);
-    let posY = Math.round(fy - previewH - 10);
+    let posY = Math.round(fy - previewH - 4); // Flush 4px gap to eliminate mouse dead zone
 
     // Multi-orientation Dock support (Bottom, Left, Right)
     if (fx <= dispX + 80) {
-      posX = Math.round(fx + fw + 10);
+      posX = Math.round(fx + fw + 4);
       posY = Math.round(fy + (fh - previewH) / 2);
     } else if (fx + fw >= dispX + dispW - 80) {
-      posX = Math.round(fx - previewW - 10);
+      posX = Math.round(fx - previewW - 4);
       posY = Math.round(fy + (fh - previewH) / 2);
     } else {
       if (posY < dispY + 10) {
-        posY = Math.round(fy + fh + 10);
+        posY = Math.round(fy + fh + 4);
       }
     }
 
     // Safety screen boundary clamping
-    posX = Math.max(dispX + 10, Math.min(dispX + dispW - previewW - 10, posX));
-    posY = Math.max(dispY + 10, Math.min(dispY + dispH - previewH - 10, posY));
+    posX = Math.max(dispX + 8, Math.min(dispX + dispW - previewW - 8, posX));
+    posY = Math.max(dispY + 8, Math.min(dispY + dispH - previewH - 8, posY));
 
     if (dockPreviewWin && !dockPreviewWin.isDestroyed()) {
       dockPreviewWin.setBounds({ x: posX, y: posY, width: previewW, height: previewH });
@@ -359,7 +359,7 @@ function hideDockPreview() {
         dockPreviewWin.hide();
       }
     } catch (_) {}
-  }, 260);
+  }, 550); // Generous 550ms grace period so moving cursor to cards never vanishes
 }
 
 function startDockHelper() {

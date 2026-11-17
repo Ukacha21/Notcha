@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
+  <title>Notcha Dock Preview</title>
+  <style>
+    :root {
+      --bg: rgba(15, 14, 23, 0.96);
+      --surface: rgba(255, 255, 255, 0.08);
+      --surface-hover: rgba(255, 255, 255, 0.16);
+      --border: rgba(255, 255, 255, 0.14);
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.4);
+      --danger: #f43f5e;
+      --text: #ffffff;
+      --text-dim: rgba(255, 255, 255, 0.65);
+      --spring: cubic-bezier(0.34, 1.45, 0.5, 1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 0;
+    }
+    .preview-shell {
+      display: inline-flex;
+      flex-direction: column;
+      background: var(--bg);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 24px var(--accent-glow);
+      padding: 12px 14px;
+      gap: 9px;
+      animation: popIn 0.18s var(--spring);
+      margin-bottom: 2px;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: translateY(4px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .app-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      object-fit: contain;
+    }
+    .app-name {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.2px;
+    }
+    .win-count {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.16);
+      padding: 2px 7px;
+      border-radius: 8px;
+    }
+    .cards-row {
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      overflow-x: auto;
+      max-width: 880px;
+    }
+    .window-card {
+      display: flex;
+      flex-direction: column;
+      width: 220px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.18s ease;
+    }
+    .window-card:hover {
+      background: var(--surface-hover);
+      border-color: rgba(56, 189, 248, 0.6);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    }
+    .thumb-wrap {
+      width: 100%;
+      height: 136px;
+      background: #09080c;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .thumb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      display: block;
+    }
+    .thumb-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 0 10px;
+    }
+    .thumb-placeholder svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--accent);
+      fill: none;
+      stroke-width: 1.8;
+    }
+    .thumb-placeholder.minimized svg {
+      stroke: #f59e0b;
+    }
+    .card-footer {
+      padding: 7px 9px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+    .min-badge {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 1.5px 5.5px;
+      border-radius: 6px;
+      background: rgba(245, 158, 11, 0.22);
+      color: #f59e0b;
+      flex-shrink: 0;
+    }
+    .close-card-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 0;
+      background: rgba(0, 0, 0, 0.7);
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      line-height: 1;
+      display: grid;
+      place-items: center;
+      opacity: 0;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      z-index: 10;
+    }
+    .window-card:hover .close-card-btn {
+      opacity: 1;
+    }
+    .close-card-btn:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-shell" id="previewShell">
+    <div class="header">
+      <div class="header-left">
+        <img class="app-icon" id="appIcon" src="" alt="" />
+        <span class="app-name" id="appName">App Name</span>
+      </div>
+      <span class="win-count" id="winCount">1 Window</span>
+    </div>
+
+    <div class="cards-row" id="cardsRow"></div>
+  </div>
+
+  <script src="dock-preview.js"></script>
+</body>
+</html>

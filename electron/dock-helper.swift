@@ -181,16 +181,15 @@ class DockHelper {
         }
 
         let pid = app.processIdentifier
+        let isFinder = (app.bundleIdentifier == "com.apple.finder") || (app.localizedName == "Finder")
         let appIconB64 = getAppIconBase64(app: app) ?? ""
 
-        // Query open windows via CGWindowListCopyWindowInfo
         var windowData: [[String: Any]] = []
+
         if let windowList = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
             let appWindows = windowList.filter {
                 ($0[kCGWindowOwnerPID as String] as? pid_t) == pid &&
-                ($0[kCGWindowLayer as String] as? Int) == 0 &&
-                (($0[kCGWindowBounds as String] as? [String: Any])?["Width"] as? CGFloat ?? 0) > 80 &&
-                (($0[kCGWindowBounds as String] as? [String: Any])?["Height"] as? CGFloat ?? 0) > 80
+                ($0[kCGWindowLayer as String] as? Int) == 0
             }
 
             let appAx = AXUIElementCreateApplication(pid)
@@ -198,43 +197,63 @@ class DockHelper {
             AXUIElementCopyAttributeValue(appAx, kAXWindowsAttribute as CFString, &axWinRef)
             let axWindows = (axWinRef as? [AXUIElement]) ?? []
 
+            var axMinMap: [String: Bool] = [:]
+            for axW in axWindows {
+                var tRef: CFTypeRef?
+                var mRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(axW, kAXTitleAttribute as CFString, &tRef)
+                AXUIElementCopyAttributeValue(axW, kAXMinimizedAttribute as CFString, &mRef)
+                if let t = tRef as? String, !t.isEmpty {
+                    axMinMap[t] = (mRef as? Bool) ?? false
+                }
+            }
+
             for (idx, w) in appWindows.enumerated() {
                 let winId = w[kCGWindowNumber as String] as? CGWindowID ?? 0
-                var title = (w[kCGWindowName as String] as? String) ?? ""
+                let rawTitle = (w[kCGWindowName as String] as? String) ?? ""
+                let bounds = (w[kCGWindowBounds as String] as? [String: Any]) ?? [:]
+                let width = bounds["Width"] as? CGFloat ?? 0
+                let height = bounds["Height"] as? CGFloat ?? 0
 
-                var axIsMinimized = false
-                if idx < axWindows.count {
-                    let axW = axWindows[idx]
-                    if title.isEmpty {
-                        var axTitleRef: CFTypeRef?
-                        AXUIElementCopyAttributeValue(axW, kAXTitleAttribute as CFString, &axTitleRef)
-                        title = (axTitleRef as? String) ?? ""
-                    }
-                    var minRef: CFTypeRef?
-                    AXUIElementCopyAttributeValue(axW, kAXMinimizedAttribute as CFString, &minRef)
-                    if let m = minRef as? Bool, m {
-                        axIsMinimized = true
+                // Filter out tiny or extreme aspect ratio windows (e.g. 1920x24 menu bars, 1920x125 strips)
+                guard width >= 120 && height >= 80 else { continue }
+                let aspect = max(width, height) / max(1, min(width, height))
+                if aspect > 7.0 && rawTitle.isEmpty { continue }
+
+                var title = rawTitle
+                var isMin = false
+
+                if isFinder {
+                    if title.isEmpty { continue }
+                } else {
+                    if let m = axMinMap[title] {
+                        isMin = m
                     }
                 }
 
-                if title.isEmpty {
-                    for axW in axWindows {
-                        var axTitleRef: CFTypeRef?
-                        AXUIElementCopyAttributeValue(axW, kAXTitleAttribute as CFString, &axTitleRef)
-                        if let t = axTitleRef as? String, !t.isEmpty {
-                            title = t
-                            break
-                        }
+                if title.isEmpty && idx < axWindows.count {
+                    var tRef: CFTypeRef?
+                    AXUIElementCopyAttributeValue(axWindows[idx], kAXTitleAttribute as CFString, &tRef)
+                    if let t = tRef as? String, !t.isEmpty {
+                        title = t
                     }
+                }
+
+                let thumbB64 = captureThumbnail(windowId: winId) ?? ""
+
+                // Discard ghost internal windows with no image, no title, and not minimized
+                if thumbB64.isEmpty && !isMin && rawTitle.isEmpty {
+                    continue
                 }
 
                 if title.isEmpty {
                     title = appWindows.count > 1 ? "\(appName) (Window \(idx + 1))" : "\(appName) Window"
                 }
 
-                // Live capture: if image captured, it is active and NOT minimized!
-                let thumbB64 = captureThumbnail(windowId: winId) ?? ""
-                let isMin = thumbB64.isEmpty && axIsMinimized
+                // If a live image exists, it is definitely not minimized
+                if !thumbB64.isEmpty {
+                    isMin = false
+                }
 
                 windowData.append([
                     "id": Int(winId),
@@ -305,7 +324,29 @@ class DockHelper {
 
     func raiseWindow(pid: pid_t, windowIndex: Int, windowTitle: String? = nil) {
         guard let app = NSRunningApplication(processIdentifier: pid) else { return }
-        app.activate(options: .activateIgnoringOtherApps)
+        let isFinder = (app.bundleIdentifier == "com.apple.finder") || (app.localizedName == "Finder")
+
+        if isFinder, let targetTitle = windowTitle, !targetTitle.isEmpty {
+            let escapedTitle = targetTitle.replacingOccurrences(of: "\"", with: "\\\"")
+            let scriptSource = """
+            tell application "Finder"
+                set matchingWins to (every window whose name is "\(escapedTitle)")
+                if (count of matchingWins) > 0 then
+                    set targetWin to item 1 of matchingWins
+                    set collapsed of targetWin to false
+                    set index of targetWin to 1
+                end if
+                activate
+            end tell
+            """
+            if let script = NSAppleScript(source: scriptSource) {
+                var err: NSDictionary?
+                script.executeAndReturnError(&err)
+                return
+            }
+        }
+
+        app.activate()
 
         let appAx = AXUIElementCreateApplication(pid)
         var winListRef: CFTypeRef?
@@ -335,6 +376,23 @@ class DockHelper {
     }
 
     func closeWindow(pid: pid_t, windowIndex: Int, windowTitle: String? = nil) {
+        guard let app = NSRunningApplication(processIdentifier: pid) else { return }
+        let isFinder = (app.bundleIdentifier == "com.apple.finder") || (app.localizedName == "Finder")
+
+        if isFinder, let targetTitle = windowTitle, !targetTitle.isEmpty {
+            let escapedTitle = targetTitle.replacingOccurrences(of: "\"", with: "\\\"")
+            let scriptSource = """
+            tell application "Finder"
+                close (every window whose name is "\(escapedTitle)")
+            end tell
+            """
+            if let script = NSAppleScript(source: scriptSource) {
+                var err: NSDictionary?
+                script.executeAndReturnError(&err)
+                return
+            }
+        }
+
         let appAx = AXUIElementCreateApplication(pid)
         var winListRef: CFTypeRef?
         AXUIElementCopyAttributeValue(appAx, kAXWindowsAttribute as CFString, &winListRef)

@@ -1,4 +1,4 @@
-# Notcha 3.3.0
+# Notcha 3.3.1
 
 > A dynamic-island style desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, power controls, and high-speed Wi-Fi file transfers.
 
@@ -11,22 +11,23 @@
 **Does the macOS release support Apple Silicon?**
 **Yes, 100% natively!**
 
-- **Native Apple Silicon Architecture**: Notcha 3.3.0 includes dedicated native Apple Silicon packages (`Notcha-3.3.0-arm64.dmg` and `Notcha-3.3.0-arm64-mac.zip`) specifically compiled for Apple's M-series chips (M1, M2, M3, M4 and their Pro/Max/Ultra variants).
+- **Native Apple Silicon Architecture**: Notcha 3.3.1 includes dedicated native Apple Silicon packages (`Notcha-3.3.1-arm64.dmg` and `Notcha-3.3.1-arm64-mac.zip`) specifically compiled for Apple's M-series chips (M1, M2, M3, M4 and their Pro/Max/Ultra variants).
 - **Universal Mach-O Helper Binaries**: Both native helper binaries—`dock-helper` (Dock icon tracking and live window preview capture) and `media-helper` (MediaRemote and CoreAudio controller)—are compiled as **Universal Mach-O binaries** containing both `arm64` and `x86_64` executable slices.
 - **Zero Rosetta 2 Overhead**: Runs directly on bare metal without needing Apple's Rosetta 2 translation layer, ensuring maximum battery efficiency, instant startup, and zero CPU emulation overhead.
-- **Intel Mac Support**: Intel-based Macs continue to be fully supported via native `x64` packages (`Notcha-3.3.0.dmg` and `Notcha-3.3.0-mac.zip`).
+- **Intel Mac Support**: Intel-based Macs continue to be fully supported via native `x64` packages (`Notcha-3.3.1.dmg` and `Notcha-3.3.1-mac.zip`).
 
 ---
 
-## 🆕 What's New in Version 3.3.0
+## 🆕 What's New in Version 3.3.1
 
 - 🖼️ **Dock Window Previews Completely Fixed & Overhauled**:
   - **Live Window Screenshots Restored**: `dock-helper` captures live window buffers directly via `CGWindowListCreateImage` (`kCGWindowListOptionIncludingWindow`). Real live screenshots are rendered across cards, eliminating false minimized placeholders on background windows.
-  - **Complete Preview Visibility & Zero Clipping**: Expanded preview window height to **280px** with generous breathing room, completely eliminating title bar and card clipping.
+  - **Elimination of Dead Zone & 550ms Grace Period**: Tightened gap to 4px, aligned shell to bottom, added global mouse listeners, and extended hide timer to 550ms so moving the cursor to cards never causes premature closing.
+  - **Ghost Card Elimination**: Filtered out background Chromium helper strips (1920×125) and empty TextEdit buffers using aspect ratio clamping and thumbnail verification.
+  - **Native Finder Integration**: Un-minimizes and raises Finder folder windows via native AppleScript commands.
   - **Multi-Orientation Dock Support**: Added automatic dock orientation detection (Bottom, Left, Right) with screen edge boundary clamping.
   - **Unicode App Name Sanitization**: Stripped invisible directional marks (`\u{200E}` used in WhatsApp and localized apps) and filtered out background daemons, ensuring instant matching.
-  - **1-Click Window Focus & Minimized Restore**: Restores minimized windows via `kAXMinimizedAttribute = false` and raises windows with `options: .activateIgnoringOtherApps`.
-  - **Window Title Fallbacks**: Windows with empty titles are assigned clean fallback names (`[App Name] Window`) so no window is discarded.
+  - **1-Click Window Focus & Minimized Restore**: Restores minimized windows via `kAXMinimizedAttribute = false` and raises windows with `options: []`.
 
 ---
 
@@ -97,11 +98,11 @@
 
 | Version | Category | Issue Description | Resolution |
 | :--- | :--- | :--- | :--- |
-| **3.3.0** | **Dock Previews** | Background windows were falsely marked minimized with no screenshots. | Captured live image buffers directly with `kCGWindowListOptionIncludingWindow`; verified real images. |
-| **3.3.0** | **Dock Previews** | Preview window was clipped vertically, cutting off title bar and icon. | Expanded popup bounds to 280px with centered breathing room and multi-orientation dock positioning. |
-| **3.3.0** | **Dock Previews** | Hovering over WhatsApp and localized apps did not trigger previews. | Sanitized Unicode directional marks (`\u{200E}`) and matched against regular activation policies. |
-| **3.3.0** | **Dock Previews** | Windows with empty titles were discarded entirely. | Added clean fallback titles (`[App Name] Window`) so all windows are previewed. |
-| **3.3.0** | **Dock Previews** | Clicking minimized window thumbnails failed to restore windows. | Programmatically un-minimized via `kAXMinimizedAttribute = false` and activated with `.activateIgnoringOtherApps`. |
+| **3.3.1** | **Dock Previews** | Background windows were falsely marked minimized with no screenshots. | Captured live image buffers directly with `kCGWindowListOptionIncludingWindow`; verified real images. |
+| **3.3.1** | **Dock Previews** | Popup vanished when moving mouse from Dock icon toward cards. | Tightened gap to 4px, aligned shell to bottom, added global listeners, and extended timer to 550ms. |
+| **3.3.1** | **Dock Previews** | Ghost cards with generic placeholder icons appeared for Chromium/TextEdit. | Added aspect ratio filtering and discarded ghost helper windows lacking live buffers. |
+| **3.3.1** | **Dock Previews** | Clicking Finder preview cards failed to focus or un-minimize folder windows. | Integrated native AppleScript commands to set collapsed to false and index to 1. |
+| **3.3.1** | **Dock Previews** | Hovering over WhatsApp and localized apps did not trigger previews. | Sanitized Unicode directional marks (`\u{200E}`) and matched against regular activation policies. |
 | **3.2.1** | **File Transfer** | HTML5 drag-and-drop from Finder failed to provide file paths. | Implemented Electron `webUtils.getPathForFile` across all preload bridges. |
 | **3.2.1** | **File Transfer** | Lack of progress feedback during multi-gigabyte transfers. | Added real-time chunked transfer tracking and live progress meters in all windows. |
 | **3.2.1** | **Device Pairing** | Device model names were inaccurate or showed generic placeholders. | Formatted as `${ip} \| [System Logo]` (`🤖 Android`, ` iOS`, `⊞ Windows`, ` macOS`). |
@@ -118,15 +119,15 @@
 
 ### macOS
 - **Apple Silicon (M1/M2/M3/M4)**:
-  - **Installer:** `Notcha-3.3.0-arm64.dmg`
-  - **Portable Archive:** `Notcha-3.3.0-arm64-mac.zip`
+  - **Installer:** [`Notcha-3.3.1-arm64.dmg`](https://github.com/Ukacha21/Notcha/releases/download/v3.3.1/Notcha-3.3.1-arm64.dmg)
+  - **Portable Archive:** [`Notcha-3.3.1-arm64-mac.zip`](https://github.com/Ukacha21/Notcha/releases/download/v3.3.1/Notcha-3.3.1-arm64-mac.zip)
 - **Intel (x64)**:
-  - **Installer:** `Notcha-3.3.0.dmg`
-  - **Portable Archive:** `Notcha-3.3.0-mac.zip`
+  - **Installer:** [`Notcha-3.3.1.dmg`](https://github.com/Ukacha21/Notcha/releases/download/v3.3.1/Notcha-3.3.1.dmg)
+  - **Portable Archive:** [`Notcha-3.3.1-mac.zip`](https://github.com/Ukacha21/Notcha/releases/download/v3.3.1/Notcha-3.3.1-mac.zip)
 
 ### Windows (10 & 11, 64-bit)
-- **NSIS Installer:** `Notcha Setup 3.3.0.exe`
-- **ZIP Archive:** `Notcha-3.3.0-win.zip`
+- **NSIS Installer:** [`Notcha Setup 3.3.1.exe`](https://github.com/Ukacha21/Notcha/releases/download/v3.3.1/Notcha.Setup.3.3.1.exe)
+- **Portable Archive:** [`Notcha-3.3.1-win.zip`](https://github.com/Ukacha21/Notcha/releases/download/v3.3.1/Notcha-3.3.1-win.zip)
 
 ---
 

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notcha • Received Transfers</title>
+  <style>
+    :root {
+      --bg: rgba(13, 12, 18, 0.95);
+      --surface: rgba(255, 255, 255, 0.04);
+      --surface-hover: rgba(255, 255, 255, 0.08);
+      --surface-active: rgba(255, 255, 255, 0.12);
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.28);
+      --accent-soft: rgba(56, 189, 248, 0.12);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text: #f8fafc;
+      --text-dim: #94a3b8;
+      --text-mute: #64748b;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      background: transparent;
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      padding: 10px;
+    }
+    .window-shell {
+      height: 100%;
+      background: var(--bg);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 24px var(--accent-glow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Draggable Titlebar */
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border);
+      -webkit-app-region: drag;
+    }
+    .title-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .title-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: rgba(16, 185, 129, 0.15);
+      display: grid;
+      place-items: center;
+      color: var(--success);
+    }
+    .title-icon svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+    .title-text {
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .device-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: var(--success);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .device-pill.unpaired {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--border);
+      color: var(--text-dim);
+    }
+    .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .title-btns {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      -webkit-app-region: no-drag;
+    }
+    .t-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: var(--surface);
+      color: var(--text-dim);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .t-btn:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .t-btn.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: rgba(56, 189, 248, 0.35);
+    }
+    .t-btn.close:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    .t-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+    /* Action bar / Filter bar */
+    .action-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--border);
+    }
+    .search-wrap {
+      position: relative;
+      flex: 1;
+      max-width: 240px;
+    }
+    .search-wrap svg {
+      position: absolute;
+      left: 9px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 13px;
+      height: 13px;
+      stroke: var(--text-mute);
+      fill: none;
+      stroke-width: 2;
+    }
+    .search-input {
+      width: 100%;
+      padding: 6px 10px 6px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .search-input::placeholder {
+      color: var(--text-mute);
+    }
+
+    .filter-pills {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .filter-pills::-webkit-scrollbar { display: none; }
+    .filter-pill {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .filter-pill:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+    .filter-pill.active {
+      background: var(--accent);
+      color: #0b1120;
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+
+    .tools-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tool-btn {
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-weight: 600;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .tool-btn:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .tool-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    /* Live Active Transfer Progress in Receive Window */
+    .active-progress-box {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 14px;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      animation: fadeIn 0.2s ease;
+    }
+    .active-progress-box.completed {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .active-progress-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+    }
+    .active-progress-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .completed .active-progress-badge { color: var(--success); }
+    .pulse-dot-spin {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+    }
+    .active-progress-percent { font-size: 11px; font-weight: 700; color: #fff; }
+    .active-progress-filename {
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .active-progress-track {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .active-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #818cf8);
+      border-radius: 3px;
+      transition: width 0.1s linear;
+    }
+    .completed .active-progress-fill { background: var(--success); }
+    .active-progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    /* Content Area */
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    }
+    .content-area::-webkit-scrollbar { width: 6px; }
+    .content-area::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      height: 100%;
+      padding: 30px;
+      gap: 12px;
+      color: var(--text-dim);
+    }
+    .empty-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      display: grid;
+      place-items: center;
+      color: var(--text-mute);
+    }
+    .empty-icon svg { width: 28px; height: 28px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .empty-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .empty-subtitle { font-size: 12px; max-width: 280px; line-height: 1.5; color: var(--text-mute); }
+
+    /* Transfer item card */
+    .transfer-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: all 0.15s ease;
+    }
+    .transfer-card:hover {
+      background: var(--surface-hover);
+      border-color: rgba(255, 255, 255, 0.18);
+      transform: translateY(-1px);
+    }
+    .card-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      flex: 1;
+    }
+    .file-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .file-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .file-icon.images { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+    .file-icon.videos { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+    .file-icon.docs { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+    .file-icon.archives { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .file-icon.other { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+
+    .file-meta {
+      min-width: 0;
+      flex: 1;
+    }
+    .file-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+    .file-sub {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-mute);
+    }
+    .badge-device {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+    .badge-device svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .card-btn {
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .card-btn:hover {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+    .card-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    /* Footer status */
+    .status-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.015);
+      border-top: 1px solid var(--border);
+      font-size: 11.5px;
+      color: var(--text-mute);
+    }
+    .footer-folder-link {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .footer-folder-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="window-shell">
+    <!-- Titlebar -->
+    <div class="titlebar">
+      <div class="title-left">
+        <div class="title-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <span class="title-text">Notcha • Received Transfers</span>
+        <div class="device-pill unpaired" id="devicePill" title="No device paired yet">
+          <span class="pulse-dot"></span>
+          <span id="deviceName">Waiting for transfers</span>
+        </div>
+      </div>
+      <div class="title-btns">
+        <button class="t-btn active" id="pinBtn" title="Toggle Always on Top">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+        </button>
+        <button class="t-btn" id="minBtn" title="Minimize">
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button class="t-btn close" id="closeBtn" title="Close">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Filter / Action Toolbar -->
+    <div class="action-bar">
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" class="search-input" id="searchInput" placeholder="Search received files..." />
+      </div>
+
+      <div class="filter-pills">
+        <button class="filter-pill active" data-filter="all">All</button>
+        <button class="filter-pill" data-filter="images">Images</button>
+        <button class="filter-pill" data-filter="videos">Videos</button>
+        <button class="filter-pill" data-filter="docs">Documents</button>
+        <button class="filter-pill" data-filter="archives">Archives</button>
+      </div>
+
+      <div class="tools-wrap">
+        <button class="tool-btn" id="openFolderBtn" title="Open ~/Downloads/Notcha Transfers in Finder">
+          <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span>Finder</span>
+        </button>
+        <button class="tool-btn" id="clearHistoryBtn" title="Clear transfer history">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Transferred Files Content -->
+    <div class="content-area">
+      <!-- Live Active Progress Box -->
+      <div id="activeProgressArea" style="display: none;"></div>
+
+      <div id="transfersList" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- Cards rendered dynamically -->
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          <div class="empty-title">No Transfers Yet</div>
+          <div class="empty-subtitle">Connect your mobile phone or PC via Notcha QR or Wi-Fi to receive photos and files instantly.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="status-footer">
+      <span id="footerCountText">0 items received</span>
+      <span class="footer-folder-link" id="footerFolderLink">
+        ~/Downloads/Notcha Transfers ↗
+      </span>
+    </div>
+  </div>
+
+  <script src="receive-window.js"></script>
+</body>
+</html>

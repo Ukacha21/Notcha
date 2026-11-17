@@ -1,1 +1,1 @@
-✓ the window preview got broken again (Fixed in v3.3.0: live screenshots with kCGWindowListOptionIncludingWindow, universal dock-helper, multi-orientation positioning, and window restoration)
+✓ the window preview got broken again (Fixed in v3.3.1: live screenshots, universal dock-helper, eliminated dead zone, 550ms grace timer, aspect ratio filtering, and native Finder AppleScript integration)

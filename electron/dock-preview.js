@@ -96,19 +96,41 @@
       .replace(/"/g, '&quot;');
   }
 
-  if (previewShell) {
-    previewShell.addEventListener('mouseenter', () => {
-      if (window.api && window.api.dockPreviewMouseEnter) {
-        window.api.dockPreviewMouseEnter();
-      }
-    });
+  function notifyMouseEnter() {
+    if (window.api && window.api.dockPreviewMouseEnter) {
+      window.api.dockPreviewMouseEnter();
+    }
+  }
 
-    previewShell.addEventListener('mouseleave', () => {
-      if (window.api && window.api.dockPreviewMouseLeave) {
-        window.api.dockPreviewMouseLeave();
+  function notifyMouseLeave() {
+    if (window.api && window.api.dockPreviewMouseLeave) {
+      window.api.dockPreviewMouseLeave();
+    }
+  }
+
+  // Global listeners to eliminate any dead zone
+  window.addEventListener('mouseenter', notifyMouseEnter);
+  document.documentElement.addEventListener('mouseenter', notifyMouseEnter);
+  if (previewShell) {
+    previewShell.addEventListener('mouseenter', notifyMouseEnter);
+    previewShell.addEventListener('mouseleave', (e) => {
+      // Check if mouse left the entire window
+      if (!e.relatedTarget) {
+        notifyMouseLeave();
       }
     });
   }
+
+  window.addEventListener('mouseleave', (e) => {
+    if (!e.relatedTarget) {
+      notifyMouseLeave();
+    }
+  });
+  document.documentElement.addEventListener('mouseleave', (e) => {
+    if (!e.relatedTarget) {
+      notifyMouseLeave();
+    }
+  });
 
   if (window.api && window.api.onDockPreviewData) {
     window.api.onDockPreviewData((data) => {
