@@ -143,7 +143,15 @@
       dropzone.classList.remove('dragover');
 
       const files = Array.from(e.dataTransfer.files || []);
-      const paths = files.map((f) => f.path).filter(Boolean);
+      const paths = [];
+      for (const f of files) {
+        let p = '';
+        if (window.api && typeof window.api.getPathForFile === 'function') {
+          try { p = window.api.getPathForFile(f); } catch (_) {}
+        }
+        if (!p) p = f.path || '';
+        if (p) paths.push(p);
+      }
       if (paths.length > 0 && window.api && window.api.shareFiles) {
         await window.api.shareFiles(paths);
       }

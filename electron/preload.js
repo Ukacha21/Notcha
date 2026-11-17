@@ -1,6 +1,18 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
+  // File Path resolution for HTML5 Drag & Drop (Electron 28+)
+  getPathForFile: (file) => {
+    try {
+      if (webUtils && typeof webUtils.getPathForFile === 'function') {
+        const p = webUtils.getPathForFile(file);
+        if (p) return p;
+      }
+      return file.path || '';
+    } catch (_) {
+      return file?.path || '';
+    }
+  },
   setIgnore: (v) => ipcRenderer.send('set-ignore', v),
   quit: () => ipcRenderer.send('quit'),
   beep: () => ipcRenderer.send('beep'),
@@ -41,6 +53,21 @@ contextBridge.exposeInMainWorld('api', {
   clearClipboard: () => ipcRenderer.send('clear-clipboard'),
   onClipboardUpdated: (cb) => ipcRenderer.on('clipboard-updated', (_e, list) => cb(list)),
 
+  // Transfer Server & Floating Windows
+  openSendWindow: () => ipcRenderer.send('open-send-window'),
+  closeSendWindow: () => ipcRenderer.send('close-send-window'),
+  setSendWindowAlwaysOnTop: (val) => ipcRenderer.send('set-send-window-always-on-top', val),
+  openReceiveWindow: () => ipcRenderer.send('open-receive-window'),
+  closeReceiveWindow: () => ipcRenderer.send('close-receive-window'),
+  setReceiveWindowAlwaysOnTop: (val) => ipcRenderer.send('set-receive-window-always-on-top', val),
+  getPairedDevice: () => ipcRenderer.invoke('get-paired-device'),
+  pairDevice: (data) => ipcRenderer.invoke('pair-device', data),
+  unpairDevice: () => ipcRenderer.invoke('unpair-device'),
+  getDiscoveredDevices: () => ipcRenderer.invoke('get-discovered-devices'),
+  onDevicePaired: (cb) => ipcRenderer.on('device-paired', (_e, dev) => cb(dev)),
+  onDeviceUnpaired: (cb) => ipcRenderer.on('device-unpaired', () => cb()),
+  onDiscoveredDevicesUpdated: (cb) => ipcRenderer.on('discovered-devices-updated', (_e, devs) => cb(devs)),
+
   // Transfer Server & Mini App
   openMiniTransfer: () => ipcRenderer.send('open-mini-transfer'),
   closeMiniTransfer: () => ipcRenderer.send('close-mini-transfer'),
@@ -55,6 +82,7 @@ contextBridge.exposeInMainWorld('api', {
   openTransfersFolder: () => ipcRenderer.send('open-transfers-folder'),
   showItemInFolder: (path) => ipcRenderer.send('show-item-in-folder', path),
   onTransferReceived: (cb) => ipcRenderer.on('transfer-received', (_e, item) => cb(item)),
+  onTransferProgress: (cb) => ipcRenderer.on('transfer-progress', (_e, progress) => cb(progress)),
   onSharedFilesUpdated: (cb) => ipcRenderer.on('shared-files-updated', (_e, files) => cb(files)),
   onTransfersHistoryUpdated: (cb) => ipcRenderer.on('transfers-history-updated', (_e, history) => cb(history)),
 

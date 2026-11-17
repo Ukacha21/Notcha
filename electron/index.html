@@ -358,77 +358,129 @@
 
           <!-- ================= 6. TRANSFER PANEL ================= -->
           <section class="panel" id="panelTransfer">
-            <input type="file" id="filePickerNotch" multiple style="display: none;" />
-
-            <!-- Transfer Status Bar & Mini App Popout -->
-            <div class="transfer-bar">
-              <div class="transfer-status-tag" id="transferStatusTag" title="Wi-Fi Drop Status">
-                <span class="transfer-pulse"></span>
-                <span id="transferServerUrl">Wi-Fi Drop Active</span>
+            <!-- Transfer Pairing Bar -->
+            <div class="transfer-pairing-bar">
+              <div class="pair-status-info" id="pairStatusInfo">
+                <span class="pair-status-dot" id="pairStatusDot"></span>
+                <div class="pair-text-group">
+                  <span class="pair-status-title" id="pairStatusTitle">Not Paired</span>
+                  <span class="pair-device-id" id="pairDeviceId">ID: ----</span>
+                </div>
+                <button class="unpair-mini-btn" id="transferUnpairBtn" style="display: none;" title="Unpair this device">Unpair</button>
               </div>
 
-              <div class="transfer-actions">
-                <button id="transferQrBtn" class="pill-mini-btn" title="Scan QR with Phone (iOS / Android)">
-                  <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h2v2h-2zM18 14h3v3h-3zM14 18h3v3h-3zM19 19h2v2h-2z"/></svg>
-                  <span>QR Pair</span>
+              <div class="transfer-bar-actions">
+                <button id="transferPairBtn" class="pill-pair-btn" title="Pair via QR Code or Network Discovery">
+                  <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  <span>Pair Device</span>
                 </button>
-                <button id="transferPopoutBtn" class="pill-mini-btn highlight" title="Open Floating Mini App Window instead of Notch">
-                  <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                <button id="transferPopoutBtn" class="pill-mini-btn" title="Open Floating Mini App Window">
+                  <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
                   <span>Mini App</span>
                 </button>
-                <button id="transferFolderBtn" class="icon-btn" title="Open Transfers Folder in Finder">
-                  <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                </button>
               </div>
             </div>
 
-            <!-- Main Dropzone -->
-            <div class="transfer-dropzone" id="notchDropzone">
-              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <div class="dropzone-text">
-                <span class="dropzone-main">Drop files to share with phone or PCs</span>
-                <span class="dropzone-sub">or click to browse • Works with iOS, Android, macOS & Windows</span>
+            <!-- Active Transfer Progress Banner -->
+            <div class="notch-transfer-progress" id="notchTransferProgress" style="display: none;">
+              <div class="notch-prog-left">
+                <span class="notch-prog-dot"></span>
+                <span id="notchProgLabel">Receiving file...</span>
               </div>
-            </div>
-
-            <!-- Active Sharing Notice -->
-            <div class="active-shared-banner" id="notchSharedBanner" style="display: none;">
-              <span id="notchSharedText">Sharing 1 file</span>
-              <button class="tag-btn" id="notchClearSharedBtn">Clear</button>
-            </div>
-
-            <!-- Gallery Albums & History -->
-            <div class="transfer-gallery-header">
-              <div class="gallery-albums">
-                <button class="album-btn active" data-album="all">All</button>
-                <button class="album-btn" data-album="images">Photos</button>
-                <button class="album-btn" data-album="videos">Videos</button>
-                <button class="album-btn" data-album="docs">Docs</button>
-                <button class="album-btn" data-album="archives">Archives</button>
+              <div class="notch-prog-track">
+                <div class="notch-prog-fill" id="notchProgFill" style="width: 0%;"></div>
               </div>
-              <button class="tag-btn" id="notchClearHistoryBtn">Clear</button>
+              <span class="notch-prog-pct" id="notchProgPct">0%</span>
             </div>
 
-            <!-- Gallery Grid/List -->
-            <div class="transfer-gallery-list" id="notchGalleryList">
-              <div class="empty-gallery">No transferred files yet. Drop files above or connect your phone!</div>
-            </div>
-
-            <!-- QR Sheet Overlay -->
-            <div class="transfer-qr-sheet" id="notchQrSheet">
-              <div class="qr-sheet-header">
-                <div class="qr-sheet-title">
-                  <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-                  <span>Connect Mobile Device</span>
+            <!-- Dual Draggable Action Cards: Send & Receive -->
+            <div class="transfer-actions-container">
+              <!-- Send Card -->
+              <button class="transfer-action-card send-card" id="openSendWindowBtn" type="button">
+                <div class="action-card-glow"></div>
+                <div class="action-card-icon send-icon">
+                  <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 </div>
-                <button id="closeNotchQrBtn" class="icon-btn close-btn" title="Close QR">&times;</button>
+                <div class="action-card-content">
+                  <div class="action-card-title">Send Files</div>
+                  <div class="action-card-sub">Open draggable window to drag & drop files</div>
+                </div>
+                <div class="action-card-arrow">
+                  <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+              </button>
+
+              <!-- Receive Card -->
+              <button class="transfer-action-card receive-card" id="openReceiveWindowBtn" type="button">
+                <div class="action-card-glow"></div>
+                <div class="action-card-icon receive-icon">
+                  <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+                <div class="action-card-content">
+                  <div class="action-card-title">Receive Files</div>
+                  <div class="action-card-sub">Open incoming transfers browser & history</div>
+                </div>
+                <div class="action-card-arrow">
+                  <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+              </button>
+            </div>
+
+            <!-- Bottom Utility Bar -->
+            <div class="transfer-utility-bar">
+              <div class="utility-server-link" id="transferPortalUrl" title="Click to copy Web Portal URL">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <span id="transferServerUrl">http://...</span>
               </div>
-              <div class="qr-sheet-body">
-                <div class="qr-sheet-code" id="notchQrBox"></div>
-                <div class="qr-sheet-info">
-                  <p class="qr-sheet-tag">Scan with iPhone or Android Camera</p>
-                  <p class="qr-sheet-url" id="notchQrUrl">http://192.168.1.x:53317</p>
-                  <p class="qr-sheet-desc">Opens the instant transfer portal directly in Safari or Chrome. No mobile app installation required!</p>
+              <button class="utility-folder-btn" id="transferFolderBtn" title="Open Transfers Folder in Finder">
+                <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Transfers Folder</span>
+              </button>
+            </div>
+
+            <!-- Pairing Modal Sheet (QR Code & Network Discovery) -->
+            <div class="transfer-pair-sheet" id="notchPairSheet">
+              <div class="pair-sheet-top">
+                <div class="pair-sheet-tabs">
+                  <button class="pair-tab-btn active" id="pairTabQrBtn" data-pair-tab="qr">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h2v2h-2zM18 14h3v3h-3zM14 18h3v3h-3zM19 19h2v2h-2z"/></svg>
+                    <span>QR Code</span>
+                  </button>
+                  <button class="pair-tab-btn" id="pairTabNetBtn" data-pair-tab="network">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
+                    <span>Discover on Network</span>
+                  </button>
+                </div>
+                <button class="pair-sheet-close" id="closePairSheetBtn" title="Close (Esc)">&times;</button>
+              </div>
+
+              <!-- Pair Tab 1: QR Code -->
+              <div class="pair-tab-content active" id="pairTabQrContent">
+                <div class="qr-container-card">
+                  <div class="qr-box-wrap" id="notchQrBox"></div>
+                  <div class="qr-info-wrap">
+                    <div class="qr-title-badge">ISO 18004 Standard QR</div>
+                    <div class="qr-headline">Scan with Phone Camera</div>
+                    <div class="qr-subtext">Instant detection on Samsung One UI, Xiaomi HyperOS, iOS & Android.</div>
+                    <div class="qr-url-pill" id="qrCopyUrlBtn" title="Click to copy link">
+                      <span id="notchQrUrl">http://...</span>
+                      <span class="qr-copy-tag">Copy</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pair Tab 2: Network Discovery -->
+              <div class="pair-tab-content" id="pairTabNetContent">
+                <div class="discovery-header">
+                  <span class="discovery-title">Devices on Wi-Fi Network</span>
+                  <button class="discovery-refresh-btn" id="refreshDiscoveryBtn" title="Scan again">
+                    <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>Refresh</span>
+                  </button>
+                </div>
+                <div class="discovery-list" id="discoveryList">
+                  <div class="empty-discovery">Scanning local Wi-Fi for devices...</div>
                 </div>
               </div>
             </div>

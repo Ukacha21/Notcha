@@ -1,15 +1,44 @@
-# Notcha 3.0.0
+# Notcha 3.2.1
 
-> A dynamic-island style desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, and power controls.
+> A dynamic-island style desktop notch companion for Windows and macOS with focus timer, media player, app shortcuts, clipboard history, power controls, and high-speed Wi-Fi file transfers.
 
 ![Notcha](logo.png)
 
-## What's New in 3.0.0 (In Progress)
+## What's New in 3.2.1
 
-- 🎧 **Audio Routing & Output Switcher**: Instant switching between AirPods, built-in speakers, HDMI, and USB audio interfaces.
-- 🗂️ **Cross-Platform File Transfer**: Local Wi-Fi transfer hub with QR code mobile web portal and transfer history/gallery.
-- 🖼️ **Dock Icon Window Previews**: Hover over dock icons to preview running app windows.
-- 🎚️ **Per-App Volume Mixer**: Software volume adjustments for individual apps.
+- 🛠️ **Fixed Drag & Drop File Path Resolution (`webUtils.getPathForFile`)**:
+  - In modern Electron, Chromium strips `File.path` on HTML5 drag-and-drop objects, which previously caused dropped files from macOS Finder to fail silently.
+  - Implemented `webUtils.getPathForFile` bridge across all windows (Send window, Receive window, Mini App, and top notch). Dragging files directly from Finder now instantly registers file paths and delivers files seamlessly.
+
+- 🏷️ **Accurate Device Identification & System Logos**:
+  - Replaced ambiguous model guessing with clean, 100% accurate device naming as requested: displays `${ip} | [System Logo / Name]` (e.g. `10.57.89.44 | 🤖 Android`, `10.57.89.78 |  iOS`, `10.57.89.92 | ⊞ Windows`, `10.57.89.155 |  macOS`).
+  - Preserves custom device names when set.
+
+- 📊 **Real-time Progress Bars for Large File Transfers**:
+  - Added live chunk-based transfer progress tracking for both **Sending** (PC to phone) and **Receiving** (phone to PC).
+  - Displays dynamic percent bars, formatted transfer sizes (`45 MB / 120 MB`), and target device info across the Send window, Receive window, and the top notch Transfer tab.
+  - Mobile web portal now displays live upload progress and download notifications with 1.2s rapid sync.
+
+## What's New in 3.2.0
+
+- 🚀 **Separate Independent Draggable Windows for File Transfers**:
+  - Drag-and-drop directly onto top notch pinned at the screen edge was prone to focus loss and auto-hide dismissals.
+  - **Notcha • Send Files**: Dedicated movable floating dropzone window with always-on-top toggle, file queue tray, and 1-click sharing to paired devices.
+  - **Notcha • Received Transfers**: Dedicated transfer browser window with live incoming transfer alerts, category filters (All, Images, Videos, Documents, Archives), search bar, and 1-click Finder reveals.
+
+- 📱 **100% Scannable ISO 18004 QR Engine**:
+  - Upgraded QR generator to industry-standard ISO/IEC 18004 specification with Level M Reed-Solomon Error Correction and 4-module quiet zones.
+  - Tested and guaranteed instant camera recognition on Samsung Galaxy (One UI Camera), Xiaomi (HyperOS / MIUI Camera), Apple iPhone (iOS Camera), and Google Lens.
+  - Fixed QR code bottom clipping: perfectly centered with comfortable padding from the island's rounded bottom boundary.
+
+- 🔗 **Device Pairing & Local Network Discovery**:
+  - Live pairing indicator in the notch Transfer tab (`● Paired: [Device Name]` / `ID: [ID]` vs `○ Not Paired`).
+  - **Pair Device Modal**:
+    - **Tab 1 - QR Code**: Instant scan-to-pair with live Wi-Fi portal link.
+    - **Tab 2 - Discover on Network**: Scans local Wi-Fi for active devices (Samsung Galaxy, Xiaomi Redmi/POCO, iPhone, iPad, PC) with 1-click pairing.
+
+- 🪟 **Standalone Mini App**:
+  - Mini App can be popped out anytime as a compact floating utility.
 
 ## What's New in 2.0.1
 

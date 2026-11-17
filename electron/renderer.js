@@ -58,22 +58,32 @@ const mixerAppList = $('mixerAppList');
 const mixerCloseBtn = $('mixerCloseBtn');
 
 // Transfer Tab Elements
-const transferServerUrl = $('transferServerUrl');
-const transferQrBtn = $('transferQrBtn');
+const pairStatusDot = $('pairStatusDot');
+const pairStatusTitle = $('pairStatusTitle');
+const pairDeviceId = $('pairDeviceId');
+const transferUnpairBtn = $('transferUnpairBtn');
+const transferPairBtn = $('transferPairBtn');
 const transferPopoutBtn = $('transferPopoutBtn');
+const openSendWindowBtn = $('openSendWindowBtn');
+const openReceiveWindowBtn = $('openReceiveWindowBtn');
+const transferPortalUrl = $('transferPortalUrl');
+const transferServerUrl = $('transferServerUrl');
 const transferFolderBtn = $('transferFolderBtn');
-const filePickerNotch = $('filePickerNotch');
-const notchDropzone = $('notchDropzone');
-const notchSharedBanner = $('notchSharedBanner');
-const notchSharedText = $('notchSharedText');
-const notchClearSharedBtn = $('notchClearSharedBtn');
-const albumBtns = document.querySelectorAll('.album-btn');
-const notchClearHistoryBtn = $('notchClearHistoryBtn');
-const notchGalleryList = $('notchGalleryList');
-const notchQrSheet = $('notchQrSheet');
+const notchPairSheet = $('notchPairSheet');
+const closePairSheetBtn = $('closePairSheetBtn');
+const pairTabQrBtn = $('pairTabQrBtn');
+const pairTabNetBtn = $('pairTabNetBtn');
+const pairTabQrContent = $('pairTabQrContent');
+const pairTabNetContent = $('pairTabNetContent');
 const notchQrBox = $('notchQrBox');
 const notchQrUrl = $('notchQrUrl');
-const closeNotchQrBtn = $('closeNotchQrBtn');
+const qrCopyUrlBtn = $('qrCopyUrlBtn');
+const refreshDiscoveryBtn = $('refreshDiscoveryBtn');
+const discoveryList = $('discoveryList');
+const notchTransferProgress = $('notchTransferProgress');
+const notchProgLabel = $('notchProgLabel');
+const notchProgFill = $('notchProgFill');
+const notchProgPct = $('notchProgPct');
 
 // Global Error Handlers
 window.addEventListener('error', (e) => {
@@ -160,7 +170,7 @@ function switchTab(tabName) {
   if (tabName === 'transfer') {
     if (typeof refreshTransferInfo === 'function') refreshTransferInfo();
   } else {
-    if (typeof closeTransferQrSheet === 'function') closeTransferQrSheet();
+    if (typeof closeTransferPairSheet === 'function') closeTransferPairSheet();
   }
 }
 
@@ -1461,10 +1471,10 @@ setInterval(() => {
 }, 4000);
 
 // ==========================================
-// 12. TRANSFER TAB & FLOATING MINI APP
+// 12. TRANSFER TAB & FLOATING WINDOWS
 // ==========================================
 let transferInfo = null;
-let activeAlbum = 'all';
+let currentPairTab = 'qr';
 
 async function refreshTransferInfo() {
   if (!window.api || !window.api.getTransferServerInfo) return;
@@ -1473,7 +1483,7 @@ async function refreshTransferInfo() {
     if (!transferInfo) return;
 
     if (transferServerUrl) {
-      transferServerUrl.textContent = transferInfo.url ? transferInfo.url.replace(/^http:\/\//, '') : 'Wi-Fi Drop Active';
+      transferServerUrl.textContent = transferInfo.url || 'http://localhost:53317';
     }
     if (notchQrUrl) {
       notchQrUrl.textContent = transferInfo.url || '';
@@ -1482,120 +1492,136 @@ async function refreshTransferInfo() {
       notchQrBox.innerHTML = transferInfo.qrSvg;
     }
 
-    updateNotchSharedFiles(transferInfo.sharedFiles || []);
-    renderTransferGallery();
+    updatePairingUI(transferInfo.pairedDevice);
   } catch (err) {
     console.error('Failed to refresh transfer info:', err);
   }
 }
 
-function updateNotchSharedFiles(files) {
-  if (!notchSharedBanner || !notchSharedText) return;
-  if (!files || files.length === 0) {
-    notchSharedBanner.style.display = 'none';
-    return;
-  }
-  notchSharedBanner.style.display = 'flex';
-  if (files.length === 1) {
-    notchSharedText.textContent = `Sharing "${files[0].name}" (${files[0].formattedSize})`;
+function updatePairingUI(pairedDevice) {
+  if (!pairStatusDot || !pairStatusTitle || !pairDeviceId) return;
+
+  if (pairedDevice && pairedDevice.name) {
+    pairStatusDot.classList.add('active');
+    pairStatusTitle.textContent = `Paired: ${pairedDevice.name}`;
+    pairDeviceId.textContent = `ID: ${pairedDevice.id || '----'}`;
+    if (transferUnpairBtn) transferUnpairBtn.style.display = 'inline-block';
   } else {
-    notchSharedText.textContent = `Sharing ${files.length} files to paired devices`;
+    pairStatusDot.classList.remove('active');
+    pairStatusTitle.textContent = 'Not Paired';
+    pairDeviceId.textContent = 'ID: ----';
+    if (transferUnpairBtn) transferUnpairBtn.style.display = 'none';
   }
 }
 
-function getFileCategoryIcon(type) {
-  switch (type) {
-    case 'images': return '🖼️';
-    case 'videos': return '🎬';
-    case 'docs': return '📄';
-    case 'archives': return '📦';
-    default: return '📁';
+function openTransferPairSheet() {
+  if (notchPairSheet) {
+    notchPairSheet.classList.add('active');
+    if (currentPairTab === 'network') {
+      refreshDiscoveredDevices();
+    }
   }
 }
 
-function formatTransferTime(timestamp) {
-  if (!timestamp) return '';
-  const d = new Date(timestamp);
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+function closeTransferPairSheet() {
+  if (notchPairSheet) {
+    notchPairSheet.classList.remove('active');
+  }
 }
 
-function renderTransferGallery() {
-  if (!notchGalleryList) return;
-  const list = (transferInfo && transferInfo.history) ? transferInfo.history : [];
-  const filtered = activeAlbum === 'all' ? list : list.filter((item) => item.type === activeAlbum);
+function switchPairTab(tab) {
+  currentPairTab = tab;
+  if (pairTabQrBtn) pairTabQrBtn.classList.toggle('active', tab === 'qr');
+  if (pairTabNetBtn) pairTabNetBtn.classList.toggle('active', tab === 'network');
+  if (pairTabQrContent) pairTabQrContent.classList.toggle('active', tab === 'qr');
+  if (pairTabNetContent) pairTabNetContent.classList.toggle('active', tab === 'network');
 
-  if (filtered.length === 0) {
-    notchGalleryList.innerHTML = '<div class="empty-gallery">No files in this album yet. Drop files above or connect your phone!</div>';
+  if (tab === 'network') {
+    refreshDiscoveredDevices();
+  }
+}
+
+async function refreshDiscoveredDevices() {
+  if (!window.api || !window.api.getDiscoveredDevices || !discoveryList) return;
+  try {
+    const devices = await window.api.getDiscoveredDevices();
+    renderDiscoveredDevices(devices || []);
+  } catch (err) {
+    console.error('Failed to get discovered devices:', err);
+  }
+}
+
+function renderDiscoveredDevices(devices) {
+  if (!discoveryList) return;
+  if (!devices || devices.length === 0) {
+    discoveryList.innerHTML = `
+      <div class="empty-discovery">
+        No active devices detected yet.<br>
+        Open the web portal on your phone or scan the QR code to pair!
+      </div>
+    `;
     return;
   }
 
-  notchGalleryList.innerHTML = '';
-  filtered.forEach((item) => {
-    const row = document.createElement('div');
-    row.className = 'gallery-row';
+  discoveryList.innerHTML = '';
+  devices.forEach((dev) => {
+    const item = document.createElement('div');
+    item.className = 'discovery-item';
 
-    const icon = getFileCategoryIcon(item.type);
-    const dirText = item.direction === 'received' ? '📥 Recv' : '📤 Sent';
-    const device = item.device ? ` • ${item.device}` : '';
+    const isPaired = dev.isPaired || (transferInfo?.pairedDevice?.id === dev.id);
+    const buttonHtml = isPaired
+      ? `<button class="dev-pair-btn paired">Paired ✓</button>`
+      : `<button class="dev-pair-btn">Pair</button>`;
 
-    row.innerHTML = `
-      <div class="gallery-thumb">${icon}</div>
-      <div class="gallery-info">
-        <div class="gallery-name" title="${item.name}">${item.name}</div>
-        <div class="gallery-meta">${dirText} • ${item.formattedSize || ''} • ${formatTransferTime(item.time)}${device}</div>
+    item.innerHTML = `
+      <div class="dev-left">
+        <div class="dev-icon">
+          <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <div class="dev-info">
+          <div class="dev-name" title="${dev.name}">${dev.name}</div>
+          <div class="dev-ip">IP: ${dev.ip || 'Wi-Fi'}</div>
+        </div>
       </div>
-      <button class="gallery-reveal" title="Show in Finder">
-        <svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>
-      </button>
+      ${buttonHtml}
     `;
 
-    row.addEventListener('click', (e) => {
-      if (e.target.closest('.gallery-reveal')) return;
-      if (window.api && window.api.showItemInFolder && item.path) {
-        window.api.showItemInFolder(item.path);
-      }
-    });
-
-    const revealBtn = row.querySelector('.gallery-reveal');
-    if (revealBtn) {
-      revealBtn.addEventListener('click', (e) => {
+    const btn = item.querySelector('.dev-pair-btn');
+    if (btn && !isPaired) {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (window.api && window.api.showItemInFolder && item.path) {
-          window.api.showItemInFolder(item.path);
+        if (window.api && window.api.pairDevice) {
+          btn.textContent = 'Pairing...';
+          await window.api.pairDevice({ deviceId: dev.id, name: dev.name });
+          refreshTransferInfo();
+          refreshDiscoveredDevices();
         }
       });
     }
 
-    notchGalleryList.appendChild(row);
+    discoveryList.appendChild(item);
   });
 }
 
-function openTransferQrSheet() {
-  if (notchQrSheet) notchQrSheet.classList.add('active');
-}
-function closeTransferQrSheet() {
-  if (notchQrSheet) notchQrSheet.classList.remove('active');
-}
-
-// QR toggle
-if (transferQrBtn) {
-  transferQrBtn.addEventListener('click', (e) => {
+// Button Listeners
+if (openSendWindowBtn) {
+  openSendWindowBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (notchQrSheet && notchQrSheet.classList.contains('active')) {
-      closeTransferQrSheet();
-    } else {
-      openTransferQrSheet();
+    if (window.api && window.api.openSendWindow) {
+      window.api.openSendWindow();
     }
   });
 }
-if (closeNotchQrBtn) {
-  closeNotchQrBtn.addEventListener('click', (e) => {
+
+if (openReceiveWindowBtn) {
+  openReceiveWindowBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    closeTransferQrSheet();
+    if (window.api && window.api.openReceiveWindow) {
+      window.api.openReceiveWindow();
+    }
   });
 }
 
-// Popout Mini App button
 if (transferPopoutBtn) {
   transferPopoutBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1605,7 +1631,52 @@ if (transferPopoutBtn) {
   });
 }
 
-// Open folder
+if (transferPairBtn) {
+  transferPairBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openTransferPairSheet();
+  });
+}
+
+if (closePairSheetBtn) {
+  closePairSheetBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeTransferPairSheet();
+  });
+}
+
+if (transferUnpairBtn) {
+  transferUnpairBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.api && window.api.unpairDevice) {
+      await window.api.unpairDevice();
+      refreshTransferInfo();
+      refreshDiscoveredDevices();
+    }
+  });
+}
+
+if (pairTabQrBtn) {
+  pairTabQrBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    switchPairTab('qr');
+  });
+}
+
+if (pairTabNetBtn) {
+  pairTabNetBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    switchPairTab('network');
+  });
+}
+
+if (refreshDiscoveryBtn) {
+  refreshDiscoveryBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    refreshDiscoveredDevices();
+  });
+}
+
 if (transferFolderBtn) {
   transferFolderBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1615,104 +1686,128 @@ if (transferFolderBtn) {
   });
 }
 
-// Album buttons
-albumBtns.forEach((btn) => {
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    activeAlbum = btn.dataset.album || 'all';
-    albumBtns.forEach((b) => b.classList.toggle('active', b === btn));
-    renderTransferGallery();
-  });
-});
+function copyPortalUrl() {
+  const url = transferInfo?.url || notchQrUrl?.textContent;
+  if (url && navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => {
+      const copyTag = document.querySelector('.qr-copy-tag');
+      if (copyTag) {
+        const oldText = copyTag.textContent;
+        copyTag.textContent = 'Copied!';
+        setTimeout(() => { copyTag.textContent = oldText; }, 1500);
+      }
+    });
+  }
+}
 
-// Dropzone Drag & Drop
-if (notchDropzone) {
-  notchDropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
+if (qrCopyUrlBtn) {
+  qrCopyUrlBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    notchDropzone.classList.add('dragover');
-  });
-
-  notchDropzone.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    notchDropzone.classList.remove('dragover');
-  });
-
-  notchDropzone.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    notchDropzone.classList.remove('dragover');
-
-    const files = Array.from(e.dataTransfer.files || []);
-    const paths = files.map((f) => f.path).filter(Boolean);
-    if (paths.length > 0 && window.api && window.api.shareFiles) {
-      await window.api.shareFiles(paths);
-      refreshTransferInfo();
-    }
-  });
-
-  notchDropzone.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    if (window.api && window.api.chooseFilesToShare) {
-      await window.api.chooseFilesToShare();
-      refreshTransferInfo();
-    } else if (filePickerNotch) {
-      filePickerNotch.click();
-    }
+    copyPortalUrl();
   });
 }
 
-if (filePickerNotch) {
-  filePickerNotch.addEventListener('change', async () => {
-    const files = Array.from(filePickerNotch.files || []);
-    const paths = files.map((f) => f.path).filter(Boolean);
-    if (paths.length > 0 && window.api && window.api.shareFiles) {
-      await window.api.shareFiles(paths);
-      refreshTransferInfo();
-    }
-    filePickerNotch.value = '';
-  });
-}
-
-// Clear buttons
-if (notchClearSharedBtn) {
-  notchClearSharedBtn.addEventListener('click', async (e) => {
+if (transferPortalUrl) {
+  transferPortalUrl.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (window.api && window.api.clearSharedFiles) {
-      await window.api.clearSharedFiles();
-    }
-  });
-}
-
-if (notchClearHistoryBtn) {
-  notchClearHistoryBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    if (window.api && window.api.clearTransfersHistory) {
-      await window.api.clearTransfersHistory();
-    }
+    copyPortalUrl();
   });
 }
 
 // Wire transfer IPC listeners
 if (window.api) {
+  if (window.api.onDevicePaired) {
+    window.api.onDevicePaired((device) => {
+      if (transferInfo) transferInfo.pairedDevice = device;
+      updatePairingUI(device);
+      refreshDiscoveredDevices();
+    });
+  }
+
+  if (window.api.onDeviceUnpaired) {
+    window.api.onDeviceUnpaired(() => {
+      if (transferInfo) transferInfo.pairedDevice = null;
+      updatePairingUI(null);
+      refreshDiscoveredDevices();
+    });
+  }
+
+  if (window.api.onDiscoveredDevicesUpdated) {
+    window.api.onDiscoveredDevicesUpdated((devices) => {
+      renderDiscoveredDevices(devices);
+    });
+  }
+
   if (window.api.onTransferReceived) {
     window.api.onTransferReceived(() => {
       refreshTransferInfo();
     });
   }
-  if (window.api.onSharedFilesUpdated) {
-    window.api.onSharedFilesUpdated((files) => {
-      if (transferInfo) transferInfo.sharedFiles = files;
-      updateNotchSharedFiles(files);
+
+  let notchProgressTimer = null;
+  if (window.api.onTransferProgress) {
+    window.api.onTransferProgress((p) => {
+      if (!notchTransferProgress) return;
+      clearTimeout(notchProgressTimer);
+      notchTransferProgress.style.display = 'flex';
+
+      if (p.status === 'completed') {
+        notchTransferProgress.classList.add('completed');
+        notchProgLabel.textContent = `✓ ${p.direction === 'receiving' ? 'Received' : 'Sent'} ${p.filename}`;
+        notchProgFill.style.width = '100%';
+        notchProgPct.textContent = '100%';
+        notchProgressTimer = setTimeout(() => {
+          notchTransferProgress.style.display = 'none';
+          notchTransferProgress.classList.remove('completed');
+        }, 3000);
+        return;
+      }
+
+      if (p.status === 'error') {
+        notchProgLabel.textContent = `⚠️ Transfer error`;
+        notchProgressTimer = setTimeout(() => { notchTransferProgress.style.display = 'none'; }, 3000);
+        return;
+      }
+
+      notchTransferProgress.classList.remove('completed');
+      notchProgLabel.textContent = `${p.direction === 'receiving' ? '📥 Receiving' : '📤 Sending'} ${p.filename}`;
+      notchProgFill.style.width = `${p.percent || 0}%`;
+      notchProgPct.textContent = `${p.percent || 0}%`;
     });
   }
-  if (window.api.onTransfersHistoryUpdated) {
-    window.api.onTransfersHistoryUpdated((hist) => {
-      if (transferInfo) transferInfo.history = hist;
-      renderTransferGallery();
+
+  // Handle Drag & Drop on notch island when Transfer tab is open
+  const islandElement = $('island');
+  if (islandElement) {
+    islandElement.addEventListener('dragover', (e) => {
+      if (activeTab === 'transfer') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    islandElement.addEventListener('drop', async (e) => {
+      if (activeTab === 'transfer' && e.dataTransfer && e.dataTransfer.files) {
+        e.preventDefault();
+        e.stopPropagation();
+        const paths = [];
+        for (const f of Array.from(e.dataTransfer.files)) {
+          let p = '';
+          if (window.api && typeof window.api.getPathForFile === 'function') {
+            try { p = window.api.getPathForFile(f); } catch (_) {}
+          }
+          if (!p) p = f.path || '';
+          if (p) paths.push(p);
+        }
+        if (paths.length > 0 && window.api && window.api.shareFiles) {
+          await window.api.shareFiles(paths);
+          if (window.api.openSendWindow) {
+            window.api.openSendWindow();
+          }
+        }
+      }
     });
   }
+
   if (window.api.onFocusTransferTab) {
     window.api.onFocusTransferTab(() => {
       isExpanded = true;

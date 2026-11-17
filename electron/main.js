@@ -15,7 +15,7 @@ process.on('unhandledRejection', (reason) => {
 
 // Canvas dimensions: large enough to fit expanded island tabs without clipping.
 const W = 640;
-const H = 300;
+const H = 320;
 let win;
 
 // In-memory clipboard history
@@ -73,16 +73,20 @@ function createWindow() {
   });
 }
 
-// ---------- Transfer Server & Mini App ----------
+// ---------- Transfer Server & Independent Floating Windows ----------
 let transferServer = null;
 let miniWin = null;
+let sendWin = null;
+let receiveWin = null;
 
 function broadcastTransferEvent(channel, data) {
-  if (win && !win.isDestroyed()) {
-    win.webContents.send(channel, data);
-  }
-  if (miniWin && !miniWin.isDestroyed()) {
-    miniWin.webContents.send(channel, data);
+  const windows = [win, miniWin, sendWin, receiveWin];
+  for (const w of windows) {
+    if (w && !w.isDestroyed()) {
+      try {
+        w.webContents.send(channel, data);
+      } catch (_) {}
+    }
   }
 }
 
@@ -91,6 +95,18 @@ function initTransferServer() {
     onTransferReceived: (item) => {
       broadcastTransferEvent('transfer-received', item);
       broadcastTransferEvent('transfers-history-updated', transferServer.history);
+    },
+    onTransferProgress: (progress) => {
+      broadcastTransferEvent('transfer-progress', progress);
+    },
+    onDevicePaired: (device) => {
+      broadcastTransferEvent('device-paired', device);
+    },
+    onDeviceUnpaired: () => {
+      broadcastTransferEvent('device-unpaired');
+    },
+    onDiscoveredDevicesUpdated: (devices) => {
+      broadcastTransferEvent('discovered-devices-updated', devices);
     },
   });
   transferServer.start().catch((err) => {
@@ -135,6 +151,86 @@ function createMiniTransferWindow() {
 
   miniWin.on('closed', () => {
     miniWin = null;
+  });
+}
+
+function createSendWindow() {
+  if (sendWin && !sendWin.isDestroyed()) {
+    sendWin.show();
+    sendWin.focus();
+    return;
+  }
+  const display = screen.getPrimaryDisplay();
+  const { width, height } = display.workAreaSize;
+  const swW = 460;
+  const swH = 540;
+
+  sendWin = new BrowserWindow({
+    width: swW,
+    height: swH,
+    x: Math.round((width - swW) / 2) - 100,
+    y: Math.round((height - swH) / 2) - 40,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: true,
+    minWidth: 380,
+    minHeight: 460,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    hasShadow: true,
+    icon: path.join(__dirname, 'logo.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  sendWin.loadFile(path.join(__dirname, 'send-window.html'));
+
+  sendWin.on('closed', () => {
+    sendWin = null;
+  });
+}
+
+function createReceiveWindow() {
+  if (receiveWin && !receiveWin.isDestroyed()) {
+    receiveWin.show();
+    receiveWin.focus();
+    return;
+  }
+  const display = screen.getPrimaryDisplay();
+  const { width, height } = display.workAreaSize;
+  const rwW = 540;
+  const rwH = 580;
+
+  receiveWin = new BrowserWindow({
+    width: rwW,
+    height: rwH,
+    x: Math.round((width - rwW) / 2) + 100,
+    y: Math.round((height - rwH) / 2) - 40,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: true,
+    minWidth: 420,
+    minHeight: 480,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    hasShadow: true,
+    icon: path.join(__dirname, 'logo.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  receiveWin.loadFile(path.join(__dirname, 'receive-window.html'));
+
+  receiveWin.on('closed', () => {
+    receiveWin = null;
   });
 }
 
@@ -1136,7 +1232,59 @@ ipcMain.on('clear-clipboard', () => {
   }
 });
 
-// ---------- Transfer Server & Mini App IPC ----------
+// ---------- Transfer Server & Floating Windows IPC ----------
+ipcMain.on('open-send-window', () => {
+  createSendWindow();
+});
+
+ipcMain.on('close-send-window', () => {
+  if (sendWin && !sendWin.isDestroyed()) {
+    sendWin.close();
+  }
+});
+
+ipcMain.on('set-send-window-always-on-top', (_e, flag) => {
+  if (sendWin && !sendWin.isDestroyed()) {
+    sendWin.setAlwaysOnTop(!!flag);
+  }
+});
+
+ipcMain.on('open-receive-window', () => {
+  createReceiveWindow();
+});
+
+ipcMain.on('close-receive-window', () => {
+  if (receiveWin && !receiveWin.isDestroyed()) {
+    receiveWin.close();
+  }
+});
+
+ipcMain.on('set-receive-window-always-on-top', (_e, flag) => {
+  if (receiveWin && !receiveWin.isDestroyed()) {
+    receiveWin.setAlwaysOnTop(!!flag);
+  }
+});
+
+ipcMain.handle('get-paired-device', () => {
+  return transferServer ? transferServer.pairedDevice : null;
+});
+
+ipcMain.handle('pair-device', (_e, data) => {
+  if (!transferServer || !data) return null;
+  return transferServer.pairDevice(data.deviceId, data.name);
+});
+
+ipcMain.handle('unpair-device', () => {
+  if (transferServer) {
+    transferServer.unpairDevice();
+  }
+  return true;
+});
+
+ipcMain.handle('get-discovered-devices', () => {
+  return transferServer ? transferServer.getDiscoveredDevices() : [];
+});
+
 ipcMain.on('open-mini-transfer', () => {
   createMiniTransferWindow();
 });
