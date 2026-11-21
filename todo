@@ -1,1 +1,17 @@
-✓ the window preview got broken again (Fixed in v3.3.1: live screenshots, universal dock-helper, eliminated dead zone, 550ms grace timer, aspect ratio filtering, and native Finder AppleScript integration)
+- Version 4.2.0:
+  - Fixed socket accept & request-handling loop so http://10.27.182.155:53317/ and http://127.0.0.1:53317/ load instantly on both Mac and mobile devices.
+  - Full two-way file transfers verified: Send Files (Mac -> Mobile) and Receive Files (Mobile -> Mac).
+  - Prominent "Pair Other Device" button in the Transfer section with quick QR code scanner & direct browser connection.
+  - Side-by-side "Send Files" and "Receive Files" action buttons with side-by-side logs for "Sent Files" (left) and "Received Files" (right).
+  - Centered live clock in the middle of the Notch (matching version 3.2.0 layout).
+  - Static sound note icon (`music.note`) shown right next to the centered clock when audio/music is playing anywhere in the system, even if muted (no equalizer bars or animated dots).
+  - Small round orb button on the left that toggles auto-hide down into an ultra-small 120x6 px indicator, smoothly expanding on hover.
+  - Using the Notcha icon from notcha_3_3_1/logo.png.
+  - Built, signed, and replaced in /Applications/Notcha.app.
+
+- Version 4.1.1:
+  - Notch resting display: live time centered in the middle of the notch (just like version 3.2.0).
+  - Music playback indicator: non-animated music note icon next to the centered time whenever audio/music is playing anywhere in the system, even if muted.
+  - File Transfer widget directly integrated into the Notch (Sections gallery & Controls shortcuts) with unclipped QR code, drop zone, and local web portal.
+  - Using the Notcha icon from notcha_3_3_1/logo.png.
+  - Replaces currently installed Notcha in /Applications/Notcha.app.
